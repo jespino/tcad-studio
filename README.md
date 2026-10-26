@@ -1,213 +1,234 @@
-# TCAD Studio — modelado 3D por sólidos y huecos, al estilo Tinkercad
+# TCAD Studio
 
-TCAD es un lenguaje (DSL) para describir modelos 3D combinando las primitivas
-de Tinkercad —cajas, cilindros, esferas, conos, toroides, texto...— como
-**sólidos** o **huecos**. `tcad` es la herramienta en Go que lee ficheros
-`.tcad` y genera **STL** listos para imprimir y **PNG** de previsualización.
+**Design printable 3D parts by talking to a coding agent, and watch them take
+shape in 3D as it works.**
+
+![TCAD Studio: the box_with_lid example in the live 3D preview, with its parameters panel, and an agent terminal next to it](docs/screenshot.png)
+
+TCAD Studio is a desktop app with two panels. On the right, a coding agent
+(Claude Code, Codex, Gemini CLI, Antigravity or a plain shell) works in a
+folder of your choice. On the left, a live 3D preview shows the models in that
+folder and updates as soon as the agent saves a file. Ask for "a box with a
+snap-on lid, 60×40 mm" or "make the walls thicker", and you see the result a
+moment later.
+
+The models are plain-text `.tcad` files in **TCAD**, a small language for
+modeling with solids and holes: you place primitives (boxes, cylinders, spheres,
+text...) and mark some of them as holes. The files are easy for an agent to
+write and easy for you to read and tweak. Every model can export a print-ready
+STL.
+
+## Features
+
+- **Live 3D preview** of every model in the folder and its subfolders, with a
+  dropdown to switch between them. It **jumps by itself to the file the agent
+  just created or saved**.
+- **Parameters panel**: each `param` of a model gets a slider, number field,
+  checkbox, text field or dropdown. Changes rebuild the model instantly
+  without touching the file, and the agent can see them.
+- **Agent terminal** in the project folder, with the TCAD skill, instructions
+  and the `tcad` tool ready for the agent to use.
+- **Checks you can trust**: dimensions, volume, triangle count and whether the
+  mesh is watertight; build errors show the line and column, and the preview
+  keeps the last valid version.
+- **STL in and out**: save the STL of any model wherever you want, or import an existing
+  STL and have it rebuilt from primitives where possible.
+- Everything runs locally and works offline (three.js and xterm.js are
+  bundled).
+
+## Getting started
+
+Requirements: Go 1.26 or later, and on Linux GTK3 and WebKitGTK 4.1
+(`sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev`). To use the agents, have
+their CLIs installed (`claude`, `codex`, `gemini`...); the studio lists the
+ones it finds on your `PATH`.
+
+```bash
+make studio                     # builds bin/tcad-studio
+bin/tcad-studio                 # start screen: open a folder or a recent one
+bin/tcad-studio ~/designs       # straight into a folder
+make run-studio FOLDER=examples # the same, through make
+make install-studio             # installs tcad-studio into $GOPATH/bin
+```
+
+Without `make`: `go build -tags gtk3 -o bin/tcad-studio ./cmd/tcad-studio`. To
+build against Wails' default GTK4 / WebKitGTK 6.0 instead, `make studio GO_TAGS=`.
+The app is built with [Wails 3](https://v3.wails.io).
+
+The same app also runs in a browser, without Wails: `tcad studio ~/designs -open`
+(see [Command line](#command-line)).
+
+## Working in TCAD Studio
+
+**A folder is a project.** Open any folder (an empty one is fine) and ask the
+agent for parts. Each part is a `.tcad` file; an assembly of several parts
+usually gets its own subfolder (`station/base.tcad`, `station/lid.tcad`...).
+You can also edit the files yourself in any editor: the preview reloads on
+every save.
+
+When it opens a folder, TCAD Studio writes what the agent needs into it:
+
+| File | What it is |
+|---|---|
+| `.agents/skills/tcad/`, `.claude/skills/tcad/` | The TCAD skill (the language, its reference and design recipes) where each agent looks for it: `.agents/skills` for Codex, Gemini CLI and Antigravity, `.claude/skills` for Claude Code. Refreshed every time the folder is opened. |
+| `AGENTS.md` | Instructions for the agent: how the preview works, how to check its work, rules. Only a marked block is managed; whatever you write outside it is kept. |
+| `CLAUDE.md`, `GEMINI.md` | `@AGENTS.md`, only if they don't exist. |
+| `.tcad/preview.json` | What you are looking at: model, errors, dimensions, `params` and the values you changed in the panel. That's how the agent knows what "this part" means. It has its own `.gitignore`. |
+
+The agent's terminal has `tcad` on its `PATH` (`tcad-studio` itself acts as
+`tcad`), so the agent can validate its models, render PNG previews to check
+them visually and export STLs without installing anything else.
+
+**In the preview:**
+
+- Mouse: orbit (left button), pan (right), zoom (wheel).
+- Keys: `F` fit the view, `E` edges, `W` triangle mesh, `G` bed, `N` /
+  `Shift+N` next / previous model.
+- Changed parameters are marked with ●; reset them one by one or all at once.
+  "Copy -D" copies them as command-line options. If you want to keep them, ask
+  the agent: it can see them in `.tcad/preview.json` and write them into the
+  file.
+- "Save STL…" opens a save dialog to write the model as a standard STL
+  anywhere you want (it starts next to the model, then wherever you saved
+  last). In the browser versions it is a plain "Download STL". `.color()`s in
+  the model are only used for the preview.
+
+## The TCAD language
 
 ```tcad
-param ancho = 60
-param fondo = 40
-param alto  = 25
-param pared = 2
+param width  = 60   // [30:150] Outer width (mm)
+param depth  = 40   // [30:150] Outer depth (mm)
+param height = 25   // [10:100] Height (mm)
+param wall   = 2    // [1.2:0.2:4] Wall thickness (mm)
 
 group {
-  box(ancho, fondo, alto, radius=3)
-  hole box(ancho - 2*pared, fondo - 2*pared, alto, radius=1).move(z=pared)
-  hole text("TCAD", size=8, height=1).rotate(x=90).move(y=-fondo/2 + 0.6, z=alto/2)
+  box(width, depth, height, radius=3)
+  hole box(width - 2*wall, depth - 2*wall, height, radius=1).move(z=wall)
+  hole text("TCAD", size=8, height=1).rotate(x=90).move(y=-depth/2 + 0.6, z=height/2)
 }
 ```
 
-```bash
-tcad build caja.tcad -o caja.stl
-tcad render caja.tcad -o caja.png
-tcad build caja.tcad -D ancho=80 -D alto=30   # cambiar parámetros sin editar
-```
-
-## Instalación
-
-Requiere Go 1.26 o superior.
-
-```bash
-make                # compila bin/tcad
-make install        # lo instala en $GOPATH/bin
-make test           # tests (make race: con el detector de carreras)
-make check          # formato + vet + tests + compilar los ejemplos (para CI)
-make examples       # STL de examples/ en out/  (make renders: los PNG)
-make watch MODEL=diseños/pieza.tcad   # visor en vivo en el navegador
-make watch MODEL="-R diseños"         # ...con todos los diseños, para elegir en la página
-make studio         # compila la app de escritorio bin/tcad-studio (TCAD Studio)
-make run-studio FOLDER=diseños        # ...y la abre en esa carpeta
-make help           # todos los objetivos
-```
-
-Sin `make`: `go build -o bin/tcad ./cmd/tcad`. `tcad` es Go puro (sin cgo).
-TCAD Studio (`cmd/tcad-studio`) usa [Wails 3](https://v3.wails.io), que necesita
-cgo y, en Linux, GTK3 y WebKitGTK 4.1 (`libgtk-3-dev libwebkit2gtk-4.1-dev`):
-`go build -tags gtk3 -o bin/tcad-studio ./cmd/tcad-studio`. Para usar el GTK4 /
-WebKitGTK 6.0 por defecto de Wails, `make studio GO_TAGS=`.
-
-## Comandos
-
-| Comando | Descripción |
-|---|---|
-| `tcad build modelo.tcad [-o x.stl] [-ascii]` | Genera el STL (binario por defecto). |
-| `tcad render modelo.tcad [-o x.png] [-view all] [-size 500]` | Previsualización: hoja 2x2 (iso, frontal, derecha, planta) o una vista (`iso`, `iso-back`, `iso-below`, `front`, `back`, `left`, `right`, `top`, `bottom`). |
-| `tcad info modelo.tcad` | Dimensiones, caja envolvente, volumen, nº de triángulos, si la malla es estanca y valores de los `param`. |
-| `tcad check modelo.tcad` | Solo valida el fichero. |
-| `tcad watch ruta... [-R] [-addr localhost:8080] [-o x.stl] [-no-stl] [-open]` | Visor 3D en el navegador que se recompila y recarga solo al guardar. Acepta varios ficheros y directorios. Ver abajo. |
-| `tcad studio [carpeta] [-addr 127.0.0.1:0] [-open]` | TCAD Studio en el navegador (vista previa + agente). Ver abajo. |
-| `tcad import pieza.stl [-o x.tcad] [-mode shapes\|embed\|ref] [-center]` | Convierte un STL (binario o ASCII) en un modelo TCAD. Ver abajo. |
-| `tcad shapes` | Lista de primitivas con sus parámetros y valores por defecto. |
-
-Todos aceptan `-D nombre=valor` (repetible) para sobrescribir `param`, y `-`
-como fichero para leer de la entrada estándar.
-
-## Visor en vivo: `tcad watch`
-
-```bash
-tcad watch diseños/soporte.tcad -open
-# watching diseños/soporte.tcad, viewer at http://127.0.0.1:8080
-```
-
-Abre una página con un visor 3D (three.js) del modelo. Cada vez que guardas el
-`.tcad` (o un STL que use con `stl("...")`), `tcad` lo recompila, reescribe el
-STL (`diseños/soporte.stl`, o el que indiques con `-o`) y el navegador recarga
-la pieza al instante sin perder el punto de vista. Si el fichero tiene un error,
-la página lo muestra con su línea y columna y sigue enseñando la última versión
-válida.
-
-- Ratón: girar (botón izquierdo), desplazar (derecho), zoom (rueda).
-- Teclas: `F` encajar la vista, `E` aristas, `W` malla de triángulos, `G` cama.
-- Muestra las medidas, el volumen, los triángulos y si la malla es estanca, y
-  respeta los `.color()` del modelo.
-- "Descargar STL" baja el STL estándar.
-- **Panel de parámetros**: cada `param` del modelo aparece con un control
-  (deslizador, campo numérico, casilla, texto o desplegable). Al cambiarlo, el
-  visor envía el valor a `tcad watch`, que recompila al momento con ese valor y
-  reescribe el STL, sin tocar el `.tcad`. Los parámetros cambiados se marcan
-  con ●, se pueden restablecer uno a uno o todos, y "Copiar -D" copia los
-  valores como opciones para `tcad build`.
-- El comentario de un `param` define su control y su descripción, como en el
-  Customizer de OpenSCAD:
+- **Primitives**: `box`, `cylinder`, `cone`,
+  `sphere`, `half_sphere`, `torus`, `tube`, `paraboloid`, `wedge`, `roof`,
+  `round_roof`, `pyramid`, `polygon`, `star`, `heart`, `icosahedron`, `text`,
+  plus `extrude` (your own 2D polygon), `revolve` (a revolved profile), `stl`
+  (import a file) and `polyhedron` (an arbitrary mesh).
+- Every primitive is created **centered in X/Y and resting on z = 0**, as if
+  dropped on the workplane. Units are mm.
+- `hole` turns a shape into a hole. `group { ... }` joins the solids and
+  subtracts the holes from them (in any order); `intersect { ... }` keeps only
+  what they have in common.
+- Chainable modifiers: `.move() .rotate() .scale() .mirror() .drop() .center() .color()`.
+- `param`, `let`, `for x in range(n)`, `if/else`, `module` (components with
+  parameters), `func` (single-expression functions), lists, operators, math
+  functions in degrees, and `$sides`/`$steps` for the resolution of curves.
+- A `param`'s comment sets its control in the parameters panel, like in the
+  OpenSCAD Customizer: `// [min:max] Description` or `// [min:step:max]`.
+  Parameters with a closed set of values are declared with `in` and show up as
+  a dropdown; unlike ranges, the values are checked:
 
   ```tcad
-  param alto   = 30      // [10:100] Altura de la caja (mm)
-  param pared  = 2       // [1.2:0.2:4] Grosor de pared     ([mín:paso:máx])
-  ```
-- Los parámetros con un conjunto cerrado de valores se declaran en el propio
-  lenguaje con `in`, y salen como desplegable:
-
-  ```tcad
-  param modo = "montado" in ["montado", "impresion"]   // Vista o piezas sueltas
+  param mode = "assembled" in ["assembled", "print"]   // View or separate parts
   ```
 
-  A diferencia de los rangos, esto se comprueba: un `-D modo=impresión` o una
-  comparación `modo == "impresión"` dan error en vez de caer en otra rama.
-- three.js va incluido en el binario: funciona sin conexión.
-- **Varios modelos**: se le pueden pasar varios ficheros y directorios, y con
-  `-R` también los subdirectorios. La página muestra entonces un desplegable
-  (agrupado por directorio) para elegir el modelo; `N` / `Mayús+N` pasan al
-  siguiente o al anterior. Solo se compila el modelo elegido, cada uno guarda
-  sus propios cambios de parámetros mientras saltas entre ellos, y los
-  `.tcad` nuevos que aparezcan en los directorios se añaden a la lista solos.
-  Cada STL se escribe junto a su modelo (`-o` solo vale con un único modelo).
+The full specification is in
+[`.agents/skills/tcad/reference.md`](.agents/skills/tcad/reference.md), and
+there are recipes (fasteners, lids, slots, arrays, text...) in
+[`.agents/skills/tcad/patterns.md`](.agents/skills/tcad/patterns.md).
+[`examples/`](examples) has complete models: a catalog of primitives, a box
+with a lid, a keychain, a gear, a planter with a saucer and a phone stand.
 
-  ```bash
-  tcad watch -R diseños -open                       # todos los diseños
-  tcad watch diseños/piernas_lego.tcad examples     # un fichero + un directorio
-  ```
-- `-no-stl` solo sirve el visor; `-addr 0.0.0.0:8080` lo abre a la red local.
-- Los `-D` iniciales de `tcad watch` se cargan como valores del panel.
+## Command line
 
-La página habla con `tcad watch` mediante una API JSON que también se puede
-usar desde scripts:
-
-| Petición | Efecto |
-|---|---|
-| `GET /api/state` | Estado: modelo mostrado (`model`, `models`), última compilación, medidas, `params` (tipo, valor, valor por defecto, anotaciones) y `overrides`. |
-| `GET /api/model`, `PUT /api/model` con `{"model": "examples/maceta.tcad"}` | Modelo mostrado y lista de modelos; elegir otro (400 si no está en la lista). |
-| `PUT /api/params` con `{"alto": "45", "fuente": "\"mono\"", "pared": null}` | Cambia valores (expresiones TCAD, como en `-D`; `null` quita el cambio). Valida nombre y tipo (400 si no encajan) y recompila. |
-| `DELETE /api/params` | Vuelve a los valores del fichero. |
-| `GET /events` | Server-Sent Events con el estado tras cada compilación. |
-| `GET /model.stl`, `GET /download.stl` | El modelo con colores (para el visor) y el STL estándar. |
-
-## TCAD Studio: diseñar con un agente
-
-TCAD Studio es una aplicación de escritorio (Wails 3) para diseñar piezas
-hablando con un agente, inspirada en Kino Studio:
-
-- **Izquierda, vista previa**: el visor de `tcad watch` con todos los modelos de
-  la carpeta abierta y sus subcarpetas (desplegable, panel de parámetros,
-  descarga del STL). **Salta solo al fichero que se crea o se guarda**, así
-  que ves cada cambio del agente en cuanto lo hace.
-- **Derecha, agente**: un terminal con Claude Code, Codex, Gemini CLI,
-  Antigravity o una shell, ejecutándose en la carpeta. La barra entre los dos
-  paneles se arrastra para repartir el espacio.
+Everything the studio does is also available from the `tcad` command, which is
+pure Go (no cgo, no GUI libraries) and handy for scripts, CI or working
+without the app.
 
 ```bash
-make run-studio                 # pantalla de inicio: abrir carpeta / recientes
-bin/tcad-studio diseños         # directamente en una carpeta
-tcad studio diseños -open       # la misma aplicación en el navegador, sin Wails
+make                # builds bin/tcad (or: go build -o bin/tcad ./cmd/tcad)
+make install        # installs it into $GOPATH/bin
 ```
 
-Una carpeta es un proyecto: ahí creas (o pides al agente que cree) los
-ficheros y subcarpetas de cada pieza o conjunto. Al abrirla, TCAD Studio
-escribe en ella lo que necesita el agente:
-
-| Fichero | Qué es |
+| Command | Description |
 |---|---|
-| `.claude/skills/tcad/` | El skill de TCAD (lenguaje, referencia y recetas), actualizado en cada apertura. |
-| `AGENTS.md` | Instrucciones para el agente: cómo funciona la vista previa, cómo comprobar su trabajo, reglas. Solo se gestiona un bloque marcado; lo que escribas fuera se conserva. |
-| `CLAUDE.md`, `GEMINI.md` | `@AGENTS.md`, solo si no existen. |
-| `.tcad/preview.json` | Lo que el usuario está viendo: modelo, errores, medidas, `params` y valores cambiados en el panel. Así el agente sabe qué es "esta pieza". Lleva su propio `.gitignore`. |
+| `tcad build model.tcad [-o x.stl] [-ascii]` | Generates the STL (binary by default). |
+| `tcad render model.tcad [-o x.png] [-view all] [-size 500]` | PNG preview: a 2x2 sheet (iso, front, right, top) or a single view (`iso`, `iso-back`, `iso-below`, `front`, `back`, `left`, `right`, `top`, `bottom`). |
+| `tcad info model.tcad` | Dimensions, bounding box, volume, number of triangles, whether the mesh is watertight, and the values of the `param`s. |
+| `tcad check model.tcad` | Only validates the file. |
+| `tcad watch path... [-R] [-addr localhost:8080] [-o x.stl] [-no-stl] [-open]` | The studio's 3D preview on its own, in the browser. See below. |
+| `tcad studio [folder] [-addr 127.0.0.1:0] [-open]` | TCAD Studio in the browser (preview + agent). |
+| `tcad import part.stl [-o x.tcad] [-mode shapes\|embed\|ref] [-center]` | Converts an STL (binary or ASCII) into a TCAD model. See below. |
+| `tcad shapes` | List of primitives with their parameters and defaults. |
 
-El terminal del agente tiene `tcad` en el `PATH` (el propio `tcad-studio`
-hace de `tcad`: `tcad-studio build x.tcad` funciona igual), así que puede
-validar y renderizar sus piezas sin instalar nada más.
-
-Cómo está hecho: `internal/studio` es un servidor local (127.0.0.1, puerto
-libre) que sirve la página, monta el visor de `internal/watch` en `/preview/`
-para la carpeta abierta y lleva los terminales del agente (`internal/terminal`,
-PTYs). La ventana de Wails solo muestra ese servidor y aporta el diálogo
-nativo para elegir carpeta; `tcad studio` sirve lo mismo para un navegador,
-con un explorador de carpetas propio. Cada sesión tiene un token aleatorio:
-la URL inicial lo lleva, la página lo guarda en una cookie `SameSite=Strict`
-y el servidor rechaza peticiones sin él, de otros orígenes o con otro `Host`.
-
-## Importar STL
+They all accept `-D name=value` (repeatable) to override a `param`, and `-` as
+the file to read from standard input:
 
 ```bash
-tcad import pieza.stl                 # genera pieza.tcad
+tcad build box.tcad -D width=80 -D height=30 -o box.stl
 ```
 
-Hay tres modos de conversión:
+`tcad-studio` also accepts all these commands (`tcad-studio build x.tcad`), so
+the desktop app is enough on its own.
 
-- **`shapes`** (por defecto) reconstruye cada cuerpo con primitivas siempre que
-  puede. Separa la malla en cuerpos conexos y analiza cada uno:
-  - las esferas teseladas pasan a `sphere`;
-  - las piezas que son extrusiones apiladas a lo largo de cualquier eje
-    (placas, engranajes, cajas de esquinas vivas, perfiles...) se rehacen capa
-    a capa: cada contorno se convierte en `box`, `cylinder`, `polygon` o
-    `extrude`, y sus agujeros pasantes en `hole`, recuperando también la
-    rotación 3D;
-  - las cavidades internas pasan a `hole`;
-  - lo que no se puede describir así (superficies curvas libres, redondeos,
-    toroides...) se conserva exacto como `polyhedron`.
-- **`embed`** copia la malla exacta en un `polyhedron` dentro del `.tcad`.
-- **`ref`** escribe solo `stl(file="pieza.stl", center=false)`, una referencia
-  al fichero original, como el "Importar" de Tinkercad.
+### Live preview without the app: `tcad watch`
 
-`-center` lleva la pieza al plano de trabajo (centrada en XY, z = 0). Tras
-convertir, `tcad import` evalúa el modelo generado y compara su volumen con el
-del STL original.
+```bash
+tcad watch designs/stand.tcad -open
+# watching designs/stand.tcad, viewer at http://127.0.0.1:8080
+tcad watch -R designs -open              # every model in designs/ and its subfolders
+```
 
-Ejemplo: el STL del engranaje de `examples/` (18 790 triángulos, 635 KB en modo
-`embed`) se convierte en 13 líneas legibles:
+It serves the studio's preview in the browser: the same 3D viewer, parameters
+panel and model dropdown, rebuilt on every save. Unlike the studio, it also
+rewrites each model's STL after every build (`designs/stand.stl`, or the file
+given with `-o` for a single model; `-no-stl` turns it off).
+`-addr 0.0.0.0:8080` opens it to the local network, and the initial `-D`s are
+loaded into the panel.
+
+The page talks to `tcad watch` through a JSON API that can also be used from
+scripts:
+
+| Request | Effect |
+|---|---|
+| `GET /api/state` | State: model shown (`model`, `models`), last build, dimensions, `params` (type, value, default, annotations) and `overrides`. |
+| `GET /api/model`, `PUT /api/model` with `{"model": "examples/planter.tcad"}` | Model shown and list of models; pick another one (400 if it is not in the list). |
+| `PUT /api/params` with `{"height": "45", "font": "\"mono\"", "wall": null}` | Changes values (TCAD expressions, as with `-D`; `null` removes the change). Validates name and type (400 if they don't fit) and rebuilds. |
+| `DELETE /api/params` | Back to the values in the file. |
+| `GET /events` | Server-Sent Events with the state after every build. |
+| `GET /model.stl`, `GET /download.stl` | The model with colors (for the viewer) and the standard STL. |
+
+### Importing STL
+
+```bash
+tcad import part.stl                  # generates part.tcad
+```
+
+There are three conversion modes:
+
+- **`shapes`** (the default) rebuilds each body from primitives whenever it
+  can. It splits the mesh into connected bodies and analyzes each one:
+  - tessellated spheres become `sphere`;
+  - parts that are stacked extrusions along any axis (plates, gears, boxes
+    with sharp corners, profiles...) are rebuilt layer by layer: each outline
+    becomes a `box`, `cylinder`, `polygon` or `extrude`, and its through holes
+    become `hole`s, also recovering the 3D rotation;
+  - internal cavities become `hole`s;
+  - whatever can't be described that way (free-form curved surfaces,
+    roundings, tori...) is kept exactly as a `polyhedron`.
+- **`embed`** copies the exact mesh into a `polyhedron` inside the `.tcad`.
+- **`ref`** only writes `stl(file="part.stl", center=false)`, a reference to
+  the original file.
+
+`-center` moves the part to the workplane (centered in XY, z = 0). After
+converting, `tcad import` evaluates the generated model and compares its volume
+with the original STL's.
+
+Example: the STL of the gear in `examples/` (18,790 triangles, 635 KB in
+`embed` mode) becomes 13 readable lines:
 
 ```tcad
 group {
-  extrude(points=[...contorno de los dientes...], height=6)
+  extrude(points=[...outline of the teeth...], height=6)
   hole cylinder(radius=4, height=8, sides=64).move(x=11, z=-1)
   ...
   hole polygon(sides=6, radius=4, height=8).move(z=-1)
@@ -218,93 +239,110 @@ group {
 }.move(z=6)
 ```
 
-Los STL también se pueden usar directamente en un modelo, como sólido o como
-hueco: `hole stl("tornillo.stl").move(z=5)`.
+STL files can also be used directly in a model, as a solid or as a hole:
+`hole stl("screw.stl").move(z=5)`.
 
-## El lenguaje en un minuto
+## Agent skill
 
-- **Primitivas** (con los parámetros de Tinkercad): `box`, `cylinder`, `cone`,
-  `sphere`, `half_sphere`, `torus`, `tube`, `paraboloid`, `wedge`, `roof`,
-  `round_roof`, `pyramid`, `polygon`, `star`, `heart`, `icosahedron`, `text`,
-  y además `extrude` (polígono 2D propio), `revolve` (perfil de revolución),
-  `stl` (importar un fichero) y `polyhedron` (malla arbitraria).
-- Cada primitiva nace **centrada en X/Y y apoyada en z = 0**, como al soltarla en
-  el plano de trabajo de Tinkercad. Unidades en mm.
-- `hole` convierte una forma en hueco. `group { ... }` une los sólidos y les resta
-  los huecos (sin importar el orden); `intersect { ... }` deja solo lo común.
-- Modificadores encadenables: `.move() .rotate() .scale() .mirror() .drop() .center() .color()`.
-- `param`, `let`, `for x in range(n)`, `if/else`, `module` (componentes con
-  parámetros), `func` (funciones de una expresión), listas, operadores, funciones
-  matemáticas en grados y `$sides`/`$steps` para la resolución de las curvas.
+[`.agents/skills/tcad/`](.agents/skills/tcad) holds a skill that teaches an
+agent the language and a design workflow: write the model, validate it with
+`tcad info`, render it and **look at the image** to fix mistakes, and generate
+the STL. It uses the open [Agent Skills](https://agentskills.io) format (a
+`SKILL.md` with a `name` and a `description`, plus reference files), so every
+agent the studio supports can use it:
 
-La especificación completa está en
-[`.claude/skills/tcad/reference.md`](.claude/skills/tcad/reference.md) y hay
-recetas (tornillería, tapas, ranuras, matrices, texto...) en
-[`.claude/skills/tcad/patterns.md`](.claude/skills/tcad/patterns.md).
-En [`examples/`](examples) hay modelos completos: catálogo de primitivas, caja
-con tapa, llavero, engranaje, maceta con plato y soporte para móvil.
+| Agent | Where it looks for skills in a project | For all your projects |
+|---|---|---|
+| Codex | `.agents/skills/` | `~/.agents/skills/` |
+| Gemini CLI | `.agents/skills/` (or `.gemini/skills/`) | `~/.agents/skills/` (or `~/.gemini/skills/`) |
+| Antigravity | `.agents/skills/` | see the Antigravity docs |
+| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
 
-## Skill para Claude
+In this repository `.claude/skills/tcad` is a link to `.agents/skills/tcad`, so
+every agent finds the skill when working here. TCAD Studio writes a copy into
+both `.agents/skills/tcad/` and `.claude/skills/tcad/` of every folder it
+opens, plus an `AGENTS.md` (read by Codex, and by Claude Code and Gemini CLI
+through `CLAUDE.md` and `GEMINI.md`) that points the agent to it. To use the
+skill anywhere else, copy the folder to one of the locations above and make
+sure `tcad` is on the `PATH`.
 
-`.claude/skills/tcad/` contiene un skill que enseña a Claude el lenguaje y un
-flujo de trabajo de diseño: escribir el modelo, validarlo con `tcad info`,
-renderizarlo y **mirar la imagen** para corregir errores, y generar el STL. Claude
-Code lo carga automáticamente al trabajar en este repositorio. Para usarlo en
-cualquier proyecto, copia la carpeta a `~/.claude/skills/tcad` y asegúrate de
-que `tcad` esté en el `PATH` (`go install ./cmd/tcad`).
+## Development
 
-## Cómo funciona
-
-```
-fichero .tcad ──► lexer/parser ──► AST ──► intérprete ──► mallas por primitiva
-                  (internal/dsl)            │
-                                            ▼
-                         CSG por árboles BSP (internal/csg)
-                         unión / diferencia / intersección
-                                            │
-                                            ▼
-                soldado de vértices + reparación de T-junctions (internal/stl)
-                                            │
-                         ┌──────────────────┴──────────────────┐
-                         ▼                                     ▼
-                   STL binario/ASCII                PNG (rasterizador software,
-                                                     internal/render)
+```bash
+make test           # tests (make race: with the race detector)
+make check          # format + vet + tests + build the examples (for CI)
+make examples       # STLs of examples/ into out/  (make renders: the PNGs)
+make studio-web FOLDER=examples   # the studio in the browser, from bin/tcad
+make help           # every target
 ```
 
-- `internal/geom`: vectores, transformaciones afines y mallas de triángulos.
-- `internal/shapes`: generadores de cada primitiva (revoluciones, extrusiones,
-  caja redondeada, texto a partir de las fuentes Go mediante `x/image/font/sfnt`).
-- `internal/csg`: booleanas con BSP (basado en csg.js) recortando solo los
-  polígonos cercanos al otro operando, lo que reduce mucho la fragmentación.
-- `internal/importer`: conversión de mallas a TCAD (detección de cuerpos,
-  esferas y extrusiones apiladas por cortes a media altura de cada capa).
-- `internal/stl`: lectura/escritura STL y post-proceso para que la malla sea estanca
-  (`tcad info` lo verifica contando aristas no compartidas por dos triángulos).
-- `internal/render`: z-buffer con supermuestreo, sombreado y detección de aristas.
-- `internal/model`: carga de un `.tcad` (parseo, evaluación y malla lista para
-  escribir); la comparten la línea de comandos y el estudio.
-- `internal/watch`: visor en vivo. Descubre los modelos de las rutas indicadas,
-  vigila los ficheros por sondeo, recompila el elegido, avisa a la página por
-  Server-Sent Events y le sirve un STL con colores por faceta. Es un
-  `http.Handler` reutilizable (`tcad watch` lo sirve solo; el estudio lo monta
-  bajo `/preview/`). Incluye three.js r160 (licencia MIT, en
+### How it works
+
+```
+.tcad file ──► lexer/parser ──► AST ──► interpreter ──► meshes per primitive
+               (internal/dsl)            │
+                                         ▼
+                      CSG with BSP trees (internal/csg)
+                      union / difference / intersection
+                                         │
+                                         ▼
+             vertex welding + T-junction repair (internal/stl)
+                                         │
+                      ┌──────────────────┴──────────────────┐
+                      ▼                                     ▼
+                binary/ASCII STL                 PNG (software rasterizer,
+                                                  internal/render)
+```
+
+The studio is a local web app: `internal/studio` is a server on 127.0.0.1 (a
+free port) that serves the page, mounts the `internal/watch` viewer at
+`/preview/` for the open folder, and runs the agent terminals. The Wails window
+(`cmd/tcad-studio`) only shows that server and provides the native folder
+dialog; `tcad studio` serves the same thing for a browser, with its own folder
+browser. Each session has a random token: the start URL carries it, the page
+keeps it in a `SameSite=Strict` cookie, and the server rejects requests
+without it, from other origins or with another `Host`.
+
+- `cmd/tcad-studio`: the desktop app (Wails 3). `cmd/tcad`: the command line.
+- `internal/studio`: the studio backend (folders, session, agent terminals)
+  and its page. It bundles xterm.js 6 (MIT license, in `internal/studio/assets`).
+- `internal/terminal`, `internal/agentctx`: the agents' PTYs and the context
+  files written into every folder.
+- `internal/watch`: the live viewer. It discovers the models of the given
+  paths, polls the files, rebuilds the chosen one, notifies the page through
+  Server-Sent Events and serves it an STL with per-facet colors. It is a
+  reusable `http.Handler` (`tcad watch` serves it on its own; the studio mounts
+  it under `/preview/`). It bundles three.js r160 (MIT license, in
   `internal/watch/assets`).
-- `internal/cli`: los comandos de `tcad` (`cmd/tcad` y `cmd/tcad-studio` los ejecutan).
-- `internal/studio`: el backend de TCAD Studio (carpetas, sesión, terminales del
-  agente) y su página. Incluye xterm.js 6 (licencia MIT, en `internal/studio/assets`).
-- `internal/terminal`, `internal/agentctx`: PTYs de los agentes y los ficheros
-  de contexto que se escriben en cada carpeta.
+- `internal/cli`: the `tcad` commands, run by both binaries.
+- `internal/model`: loading a `.tcad` (parsing, evaluation and a mesh ready to
+  write).
+- `internal/dsl`: lexer, parser and interpreter of the language.
+- `internal/geom`: vectors, affine transforms and triangle meshes.
+- `internal/shapes`: generators for every primitive (revolutions, extrusions,
+  rounded box, text from the Go fonts through `x/image/font/sfnt`).
+- `internal/csg`: BSP booleans (based on csg.js) that only clip the polygons
+  near the other operand, which greatly reduces fragmentation.
+- `internal/importer`: mesh to TCAD conversion (detection of bodies, spheres,
+  and stacked extrusions by slicing each layer halfway up).
+- `internal/stl`: STL reading/writing and post-processing so the mesh is
+  watertight (`tcad info` checks it by counting edges not shared by two
+  triangles).
+- `internal/render`: supersampled z-buffer, shading and edge detection.
 
-## Limitaciones
+## Limitations
 
-- No hay `hull` ni `minkowski`; las formas redondeadas se consiguen con los
-  parámetros `radius`/`bevel` o combinando primitivas (ver `patterns.md`).
-- El CSG trabaja en coma flotante: en casos muy degenerados (muchas piezas que se
-  cruzan exactamente en el mismo eje) pueden quedar unas pocas aristas abiertas
-  de tamaño microscópico; `tcad` lo avisa y los laminadores lo reparan solos.
-- Mallas muy densas (esferas con `steps` altos, `$sides` > 128) hacen el CSG lento.
-- `tcad import` no descompone formas con redondeos o superficies libres en
-  operaciones CSG: esos cuerpos quedan como `polyhedron` exacto (editable con
-  huecos y sólidos añadidos, pero no paramétrico).
-- Las fuentes disponibles para `text` son las Go fonts (sans y mono, con
-  variantes negrita y cursiva).
+- The desktop app is tested on Linux; macOS and Windows builds are untested,
+  and there is no packaging (installers, icons) yet.
+- There is no `hull` or `minkowski`; rounded shapes are made with the
+  `radius`/`bevel` parameters or by combining primitives (see `patterns.md`).
+- The CSG works in floating point: in very degenerate cases (many parts
+  crossing exactly on the same axis) a few microscopic open edges may be left;
+  `tcad` warns about it and slicers repair them by themselves.
+- Very dense meshes (spheres with high `steps`, `$sides` > 128) make the CSG
+  slow.
+- `tcad import` doesn't decompose shapes with roundings or free-form surfaces
+  into CSG operations: those bodies are kept as an exact `polyhedron` (editable
+  with added holes and solids, but not parametric).
+- The fonts available for `text` are the Go fonts (sans and mono, with bold
+  and italic variants).

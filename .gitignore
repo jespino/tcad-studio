@@ -4,11 +4,13 @@
 /.task/
 
 # The user's own designs (not part of the project)
-/diseños/
+/designs/
 
 # Generated meshes and previews
 *.stl
 *.png
+# ...except the documentation's images
+!/docs/*.png
 
 # TCAD Studio state written into opened folders
 .tcad/

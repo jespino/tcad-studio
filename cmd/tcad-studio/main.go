@@ -34,21 +34,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if len(os.Args) > 1 {
-		if _, err := st.Open(os.Args[1]); err != nil {
-			log.Fatal(err)
-		}
-	}
+	// The same session works in a browser, which helps when debugging the page.
+	log.Printf("TCAD Studio at %s", url)
 
 	wa := application.New(application.Options{
 		Name:        "TCAD Studio",
-		Description: "Diseña piezas 3D con TCAD y un agente",
+		Description: "Design 3D parts with TCAD and an agent",
 		// The window shows the studio's own server; Wails serves nothing.
 		Assets:     application.AssetOptions{Handler: http.NotFoundHandler()},
 		OnShutdown: st.Close,
 		Mac:        application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
 	st.SetDialogs(dialogs{wa})
+	// After SetDialogs: the folder's preview saves STLs with the native dialog.
+	if len(os.Args) > 1 {
+		if _, err := st.Open(os.Args[1]); err != nil {
+			log.Fatal(err)
+		}
+	}
 	wa.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "TCAD Studio",
 		Width:            1600,
@@ -72,6 +75,21 @@ func (d dialogs) ChooseDirectory(title, start string) (string, error) {
 		CanCreateDirectories(true)
 	if start != "" {
 		dlg.SetDirectory(start)
+	}
+	if w := d.wa.Window.Current(); w != nil {
+		dlg.AttachToWindow(w)
+	}
+	return dlg.PromptForSingleSelection()
+}
+
+func (d dialogs) SaveFile(title, dir, name string) (string, error) {
+	dlg := d.wa.Dialog.SaveFile().
+		SetMessage(title).
+		SetFilename(name).
+		CanCreateDirectories(true).
+		AddFilter("STL files", "*.stl")
+	if dir != "" {
+		dlg.SetDirectory(dir)
 	}
 	if w := d.wa.Window.Current(); w != nil {
 		dlg.AttachToWindow(w)

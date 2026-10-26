@@ -306,7 +306,7 @@ func (in *interp) execBlock(stmts []Stmt, sc *scope) ([]object, error) {
 	return objs, nil
 }
 
-// combine applies Tinkercad grouping: every solid is merged and then every
+// combine applies group semantics: every solid is merged and then every
 // hole is removed. With intersect the solids are intersected instead.
 func combine(objs []object, intersect bool) *geom.Mesh {
 	var solids, holes []*geom.Mesh
@@ -330,7 +330,7 @@ func combine(objs []object, intersect bool) *geom.Mesh {
 		base = csg.UnionAll(solids)
 	}
 	if len(holes) > 0 && len(base.Tris) > 0 {
-		// Faces carved by a hole take the color of the solid, as in Tinkercad.
+		// Faces carved by a hole take the color of the solid.
 		c := solids[0].Tris[0].Color
 		for _, h := range holes {
 			h.SetColor(c)
@@ -643,7 +643,7 @@ func (in *interp) modifier(mesh *geom.Mesh, m Modifier, sc *scope) error {
 		}
 		mesh.Transform(geom.ScaleM(s))
 	case "drop":
-		// Like Tinkercad's "drop to workplane": lowest point to z = 0.
+		// "Drop to the workplane": lowest point to z = 0.
 		if len(m.Args) != 0 {
 			return in.errf(m.P, ".drop takes no arguments")
 		}
@@ -962,7 +962,7 @@ func (in *interp) binary(x *Binary, sc *scope) (any, error) {
 }
 
 // checkOptionCompare catches comparisons that can never be true, such as
-// modo == "impresión" when modo only accepts "montado" and "impresion".
+// mode == "printing" when mode only accepts "assembled" and "print".
 func (in *interp) checkOptionCompare(x *Binary, sc *scope) error {
 	check := func(id, other Expr) error {
 		ident, ok := id.(*Ident)

@@ -1,0 +1,31 @@
+// Planter with a revolved profile, drainage holes and a saucer.
+param diameter = 70  // [40:150] Diameter of the opening (mm)
+param height   = 65  // [30:150] Height (mm)
+param wall     = 2   // [1.2:0.2:4] Wall thickness (mm)
+
+let $sides = 72
+let r_base = diameter / 2 - 8
+let r_top = diameter / 2
+
+group {
+  // Profile [radius, z] revolved around Z
+  revolve(points=[[0, 0], [r_base, 0], [r_top, height - 6], [r_top + 2, height - 6],
+                  [r_top + 2, height], [0, height]])
+  hole revolve(points=[[0, wall], [r_base - wall, wall], [r_top - wall, height - 6],
+                       [r_top - wall, height + 1], [0, height + 1]])
+  // Drainage
+  hole cylinder(radius=3, height=10).move(z=-5)
+  for i in range(6) {
+    hole cylinder(radius=2, height=10).move(x=r_base * 0.6, z=-5).rotate(z=i * 60)
+  }
+  // Feet so the water can drain
+  for i in range(3) {
+    box(12, 4, 2).move(x=r_base - 8, z=-2).rotate(z=i * 120 + 30)
+  }
+}
+
+// Saucer
+group {
+  cylinder(radius=r_base + 8, height=8, bevel=1, segments=3)
+  hole cylinder(radius=r_base + 6, height=10).move(z=2)
+}.move(x=diameter + 15).color("brown")

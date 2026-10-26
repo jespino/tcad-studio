@@ -1,0 +1,27 @@
+// Box with a snap-on lid. Both parts are printed side by side.
+param length    = 60   // [30:150] Outer length, X axis (mm)
+param width     = 40   // [30:150] Outer width, Y axis (mm)
+param height    = 30   // [10:100] Height of the box without the lid (mm)
+param wall      = 2    // [1.2:0.2:4] Wall thickness (mm)
+param clearance = 0.3  // [0:0.05:0.8] Gap between the lid's lip and the box (mm)
+
+let $sides = 48
+let corner = 3
+let inner_l = length - 2*wall
+let inner_w = width - 2*wall
+
+// Box: rounded solid minus the inside.
+group {
+  box(length, width, height, radius=corner)
+  hole box(inner_l, inner_w, height, radius=1).move(z=wall)
+}
+
+// Lid: a plate plus a hollow lip that fits into the box's opening.
+// The text is engraved on the underside, mirrored, so it reads right
+// once the lid is turned over.
+group {
+  box(length, width, wall, radius=1)
+  box(inner_l - 2*clearance, inner_w - 2*clearance, wall + 4, radius=1)
+  hole box(inner_l - 2*clearance - 2*wall, inner_w - 2*clearance - 2*wall, 10).move(z=wall)
+  hole text("TCAD", size=10, height=1, font="sans-bold").mirror("x").move(z=-0.5)
+}.move(y=width + 10).color("blue")

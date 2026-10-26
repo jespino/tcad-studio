@@ -1,9 +1,9 @@
-// Catálogo de todas las primitivas, en una rejilla de 4 columnas.
-let paso = 30
+// Catalog of every primitive, in a 4-column grid.
+let step = 30
 
 
-func cx(i) = (i % 4) * paso - 1.5 * paso
-func cy(i) = -floor(i / 4) * paso + 1.5 * paso
+func cx(i) = (i % 4) * step - 1.5 * step
+func cy(i) = -floor(i / 4) * step + 1.5 * step
 
 box(20, 20, 20, radius=3).move(cx(0), cy(0)).color("red")
 cylinder(radius=10, height=20, bevel=2, segments=4).move(cx(1), cy(1)).color("orange")

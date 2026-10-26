@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -119,22 +119,22 @@
 </head>
 <body>
 <canvas id="view"></canvas>
-<div id="empty">Compilando…</div>
+<div id="empty">Building…</div>
 
 <div id="side">
   <div id="info" class="panel">
     <h1><span id="file">{{.File}}</span>
-      <select id="model" aria-label="Modelo" title="Modelo mostrado (N / Mayús+N)"></select>
+      <select id="model" aria-label="Model" title="Model shown (N / Shift+N)"></select>
       <span id="pill" class="pill">…</span></h1>
-    <div id="stats">Esperando la primera compilación</div>
+    <div id="stats">Waiting for the first build</div>
   </div>
-  <section id="params" class="panel" aria-label="Parámetros">
+  <section id="params" class="panel" aria-label="Parameters">
     <header>
-      <h2>Parámetros</h2>
+      <h2>Parameters</h2>
       <div class="actions">
-        <button id="copycmd" class="small-btn" title="Copiar los valores como opciones -D para tcad build">Copiar -D</button>
-        <button id="resetall" class="small-btn" title="Volver a los valores del fichero">Restablecer</button>
-        <button id="fold" class="small-btn" aria-expanded="true" title="Plegar">–</button>
+        <button id="copycmd" class="small-btn" title="Copy the values as -D options for tcad build">Copy -D</button>
+        <button id="resetall" class="small-btn" title="Back to the values in the file">Reset</button>
+        <button id="fold" class="small-btn" aria-expanded="true" title="Collapse">–</button>
       </div>
     </header>
     <div id="plist"></div>
@@ -142,19 +142,19 @@
 </div>
 
 <div id="tools" class="panel">
-  <button id="fit" title="Encajar el modelo en la vista">Encajar<kbd>F</kbd></button>
-  <button id="edges" aria-pressed="true" title="Mostrar aristas">Aristas<kbd>E</kbd></button>
-  <button id="wire" aria-pressed="false" title="Ver la malla de triángulos">Malla<kbd>W</kbd></button>
-  <button id="grid" aria-pressed="true" title="Mostrar la cama">Cama<kbd>G</kbd></button>
-  <a id="download" href="download.stl" download>Descargar STL</a>
+  <button id="fit" title="Fit the model in the view">Fit<kbd>F</kbd></button>
+  <button id="edges" aria-pressed="true" title="Show edges">Edges<kbd>E</kbd></button>
+  <button id="wire" aria-pressed="false" title="Show the triangle mesh">Mesh<kbd>W</kbd></button>
+  <button id="grid" aria-pressed="true" title="Show the bed">Bed<kbd>G</kbd></button>
+  <a id="download" href="download.stl" download title="Download the model as an STL file">Download STL</a>
 </div>
 
-<div id="conn" class="panel">Conexión perdida con tcad watch, reintentando…</div>
+<div id="conn" class="panel">Lost the connection to tcad watch, retrying…</div>
 
 <div id="error" class="panel">
-  <strong>Error al compilar</strong>
+  <strong>Build error</strong>
   <pre id="errtext"></pre>
-  <div class="hint">Se muestra la última versión válida. Corrige el fichero o el parámetro para reintentar.</div>
+  <div class="hint">Showing the last valid version. Fix the file or the parameter to try again.</div>
 </div>
 
 <script type="module">
@@ -238,9 +238,10 @@ function clearModel() {
 function fit() {
   if (!mesh) return;
   const sphere = mesh.geometry.boundingSphere || (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere);
-  // Fit the narrower of the two angles: panels taller than wide are common.
+  // Fit the narrower of the two angles (panels taller than wide are common),
+  // measuring the width that the side panels leave free.
   const vfov = THREE.MathUtils.degToRad(camera.fov / 2);
-  const hfov = Math.atan(Math.tan(vfov) * camera.aspect);
+  const hfov = Math.atan(Math.tan(vfov) * (innerWidth - freeLeft()) / innerHeight);
   const dist = sphere.radius / Math.sin(Math.min(vfov, hfov)) * 1.15;
   const dir = new THREE.Vector3(0.9, -1.2, 0.85).normalize();
   controls.target.copy(sphere.center);
@@ -264,7 +265,7 @@ async function loadModel(stamp) {
   }
 }
 
-const fmt = (x, d = 1) => x.toLocaleString('es-ES', { maximumFractionDigits: d });
+const fmt = (x, d = 1) => x.toLocaleString('en-US', { maximumFractionDigits: d });
 function showStatus(st) {
   const pill = document.getElementById('pill');
   const info = document.getElementById('info');
@@ -272,10 +273,10 @@ function showStatus(st) {
   if (!st.model) {
     // A folder without models yet: the first one that appears is shown.
     pill.className = 'pill';
-    pill.textContent = 'Sin modelos';
-    document.getElementById('file').textContent = 'Ningún modelo';
-    document.getElementById('stats').textContent = 'Crea un fichero .tcad en la carpeta y aparecerá aquí.';
-    empty.textContent = 'Todavía no hay ningún modelo .tcad';
+    pill.textContent = 'No models';
+    document.getElementById('file').textContent = 'No model';
+    document.getElementById('stats').textContent = 'Create a .tcad file in the folder and it will show up here.';
+    empty.textContent = 'There are no .tcad models yet';
     empty.style.display = '';
     document.getElementById('error').style.display = 'none';
     return;
@@ -283,21 +284,21 @@ function showStatus(st) {
   // Neither built nor failed: a model that was just picked.
   const busy = !st.ok && !st.error;
   pill.className = 'pill ' + (busy ? '' : st.ok ? 'ok' : 'err');
-  pill.textContent = busy ? 'Compilando…' : st.ok ? 'Actualizado ' + st.time : 'Error ' + st.time;
+  pill.textContent = busy ? 'Building…' : st.ok ? 'Updated ' + st.time : 'Error ' + st.time;
   if (st.hasModel) {
     const [x, y, z] = st.size;
-    const tight = st.openEdges === 0 ? 'estanco' : st.openEdges + ' aristas abiertas';
+    const tight = st.openEdges === 0 ? 'watertight' : st.openEdges + ' open edges';
     document.getElementById('stats').textContent =
       `${fmt(x, 2)} × ${fmt(y, 2)} × ${fmt(z, 2)} mm · ${fmt(st.volume / 1000, 2)} cm³ · ` +
-      `${st.triangles.toLocaleString('es-ES')} triángulos · ${tight} · ${st.buildMs} ms` +
+      `${st.triangles.toLocaleString('en-US')} triangles · ${tight} · ${st.buildMs} ms` +
       (st.output ? ' · → ' + st.output : '');
   } else {
-    document.getElementById('stats').textContent = 'Esperando la primera compilación';
+    document.getElementById('stats').textContent = 'Waiting for the first build';
   }
   const err = document.getElementById('error');
   err.style.display = st.error ? 'block' : 'none';
   document.getElementById('errtext').textContent = st.error || '';
-  if (!st.hasModel && st.error) document.getElementById('empty').textContent = 'El modelo todavía no compila';
+  if (!st.hasModel && st.error) document.getElementById('empty').textContent = 'The model does not build yet';
   if (st.ok) { info.classList.remove('flash'); void info.offsetWidth; info.classList.add('flash'); }
 }
 
@@ -343,7 +344,7 @@ function showModels(st) {
     clearModel();
     fitted = false;
     const empty = document.getElementById('empty');
-    empty.textContent = 'Compilando…';
+    empty.textContent = 'Building…';
     empty.style.display = '';
   }
 }
@@ -351,7 +352,7 @@ function showModels(st) {
 async function pickModel(model) {
   if (!model || model === shownModel) return;
   document.getElementById('pill').className = 'pill';
-  document.getElementById('pill').textContent = 'Compilando…';
+  document.getElementById('pill').textContent = 'Building…';
   const res = await fetch('api/model', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -386,7 +387,7 @@ function literal(p, v) {
 
 async function sendParams(body, row) {
   document.getElementById('pill').className = 'pill';
-  document.getElementById('pill').textContent = 'Compilando…';
+  document.getElementById('pill').textContent = 'Building…';
   const res = await fetch('api/params', {
     method: body === null ? 'DELETE' : 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -419,7 +420,7 @@ function buildRow(p) {
   row.dataset.name = p.name;
   const id = 'p-' + p.name;
   row.innerHTML = `<div class="top"><label for="${id}"></label>
-    <button class="small-btn reset" title="Volver al valor del fichero">↺</button></div>
+    <button class="small-btn reset" title="Back to the value in the file">↺</button></div>
     <div class="ctl"></div>`;
   row.querySelector('label').textContent = p.name;
   if (p.doc) {
@@ -476,7 +477,7 @@ function buildRow(p) {
     txt.type = 'text';
     txt.id = id;
     txt.spellcheck = false;
-    if (p.type === 'list') txt.title = 'Lista en sintaxis TCAD, por ejemplo [10, 20, 30]';
+    if (p.type === 'list') txt.title = 'A list in TCAD syntax, for example [10, 20, 30]';
     txt.oninput = () => setParam(p, txt.value, row, p.type === 'list' ? 900 : 500);
     txt.onkeydown = (e) => { if (e.key === 'Enter') setParam(p, txt.value, row); };
     ctl.append(txt);
@@ -524,10 +525,10 @@ document.getElementById('fold').onclick = (e) => {
 document.getElementById('copycmd').onclick = async (e) => {
   const sq = (x) => "'" + x.replace(/'/g, "'\\''") + "'";
   const flags = (lastState?.params || []).filter((p) => p.overridden).map((p) => '-D ' + sq(p.name + '=' + p.expr));
-  const text = flags.join(' ') || '(sin cambios)';
-  try { await navigator.clipboard.writeText(text); } catch { prompt('Opciones -D:', text); return; }
-  e.target.textContent = 'Copiado';
-  setTimeout(() => { e.target.textContent = 'Copiar -D'; }, 1200);
+  const text = flags.join(' ') || '(no changes)';
+  try { await navigator.clipboard.writeText(text); } catch { prompt('-D options:', text); return; }
+  e.target.textContent = 'Copied';
+  setTimeout(() => { e.target.textContent = 'Copy -D'; }, 1200);
 };
 
 const conn = document.getElementById('conn');
@@ -537,6 +538,11 @@ events.onerror = () => { conn.style.display = 'block'; };
 events.onmessage = (e) => {
   const st = JSON.parse(e.data);
   lastState = st;
+  if (st.canSave && !download.dataset.save) {
+    download.dataset.save = '1';
+    download.textContent = 'Save STL…';
+    download.title = 'Save the model as an STL file';
+  }
   showModels(st);
   showStatus(st);
   showParams(st);
@@ -552,6 +558,25 @@ function toggle(name, button) {
   }
   bed.visible = state.grid;
 }
+// In the desktop app the server can show a native save dialog: then the
+// button saves wherever the user picks instead of downloading.
+const download = document.getElementById('download');
+download.onclick = async (e) => {
+  if (!lastState?.canSave) return; // a plain download
+  e.preventDefault();
+  try {
+    const res = await fetch('api/save', { method: 'POST' });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out.error || res.statusText);
+    if (!out.path) return; // cancelled
+    download.textContent = 'Saved ✓';
+    download.title = 'Saved to ' + out.path;
+    setTimeout(() => { download.textContent = 'Save STL…'; }, 2000);
+  } catch (err) {
+    alert('Could not save the STL: ' + err.message);
+  }
+};
+
 document.getElementById('fit').onclick = fit;
 document.getElementById('edges').onclick = () => toggle('edges', 'edges');
 document.getElementById('wire').onclick = () => toggle('wire', 'wire');
@@ -567,10 +592,20 @@ addEventListener('keydown', (e) => {
   else if (k === 'n') stepModel(e.shiftKey ? -1 : 1);
 });
 
+// The side panels cover the left of the canvas. When there is room beside
+// them, the camera's center moves to the middle of the free area, so the
+// model isn't hidden behind the panels.
+function freeLeft() {
+  const left = document.getElementById('side').getBoundingClientRect().right + 12;
+  return left < innerWidth * 0.55 ? left : 0;
+}
+
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = innerWidth, h = innerHeight, left = freeLeft();
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
+  if (left > 0) camera.setViewOffset(w, h, -left / 2, 0, w, h);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);

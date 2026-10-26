@@ -1,0 +1,14 @@
+// Keychain with a raised name.
+param name      = "Jesus"  // Keychain text
+param thickness = 3        // [2:0.5:6] Plate thickness (mm)
+param font      = "sans-bold" in ["sans", "sans-bold", "sans-italic", "sans-bold-italic", "mono", "mono-bold"]  // Typeface
+
+let length = len(name) * 7 + 16
+
+group {
+  box(length, 16, thickness, radius=1, steps=4)
+  // key ring hole
+  hole cylinder(radius=2.5, height=10).move(x=-length/2 + 5, z=-1)
+}
+// The text sinks 0.5 mm into the plate for a solid joint and sticks out 1.5 mm.
+text(name, size=8, height=2, font=font).move(x=4, y=-0.5, z=thickness - 0.5).color("white")

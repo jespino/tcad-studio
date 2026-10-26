@@ -18,15 +18,17 @@ import (
 var templates embed.FS
 
 const (
-	beginMarker = "<!-- tcad:begin (lo gestiona TCAD Studio; lo que escribas dentro de este bloque se sobrescribe) -->"
+	beginMarker = "<!-- tcad:begin (managed by TCAD Studio; edits inside this block are overwritten) -->"
 	endMarker   = "<!-- tcad:end -->"
 )
 
 // Write creates or refreshes the context files in dir:
 //
-//	AGENTS.md                bloque gestionado (lo que el usuario escriba fuera se conserva)
-//	CLAUDE.md, GEMINI.md     "@AGENTS.md", solo si no existen
-//	.claude/skills/tcad/     the skill, copied from skill (a folder of .md files)
+//	AGENTS.md                managed block (whatever the user writes outside it is kept)
+//	CLAUDE.md, GEMINI.md     "@AGENTS.md", only if missing
+//	.agents/skills/tcad/     the skill, copied from skill (a folder of .md files),
+//	                         where Codex, Gemini CLI and Antigravity look for it
+//	.claude/skills/tcad/     the same skill again, for Claude Code
 func Write(dir string, skill fs.FS, skillDir string) error {
 	agents, err := templates.ReadFile("templates/AGENTS.md")
 	if err != nil {
@@ -52,13 +54,21 @@ func Write(dir string, skill fs.FS, skillDir string) error {
 		if err != nil {
 			return err
 		}
-		dst := filepath.Join(dir, ".claude", "skills", "tcad", path.Base(f))
-		if err := writeIfChanged(dst, content); err != nil {
-			return err
+		for _, root := range skillRoots {
+			dst := filepath.Join(dir, root, "skills", "tcad", path.Base(f))
+			if err := writeIfChanged(dst, content); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
+
+// skillRoots are the folders agents look for skills in: .agents/skills is the
+// shared one (Codex, Gemini CLI, Antigravity); Claude Code only reads
+// .claude/skills. Each gets a real copy, not a link, so the folder works on
+// any system and survives being copied around.
+var skillRoots = []string{".agents", ".claude"}
 
 func writeIfChanged(p string, content []byte) error {
 	if old, err := os.ReadFile(p); err == nil && bytes.Equal(old, content) {

@@ -132,33 +132,33 @@ func TestErrors(t *testing.T) {
 }
 
 func TestParamInfo(t *testing.T) {
-	src := `param ancho = 60      // [20:200] Ancho exterior
-param pared = 2       // [1:0.5:5]
-param fuente = "sans" in ["sans", "mono"] // Tipo de letra
-param tapa = true     # Imprimir la tapa
+	src := `param width = 60      // [20:200] Outer width
+param wall = 2        // [1:0.5:5]
+param font = "sans" in ["sans", "mono"] // Typeface
+param lid = true      # Print the lid
 param color = "#ff0000"
 param pts = [1, 2]
-box(ancho, 10, pared)
+box(width, 10, wall)
 `
-	res := eval(t, src, map[string]string{"pared": "3", "nombre_viejo": "1"}, true)
+	res := eval(t, src, map[string]string{"wall": "3", "old_name": "1"}, true)
 	got := map[string]ParamValue{}
 	for _, p := range res.Params {
 		got[p.Name] = p
 	}
-	a := got["ancho"]
-	if a.Type != "number" || *a.Min != 20 || *a.Max != 200 || a.Step != nil || a.Doc != "Ancho exterior" {
-		t.Errorf("ancho: %+v", a)
+	w := got["width"]
+	if w.Type != "number" || *w.Min != 20 || *w.Max != 200 || w.Step != nil || w.Doc != "Outer width" {
+		t.Errorf("width: %+v", w)
 	}
-	p := got["pared"]
+	p := got["wall"]
 	if !p.Overridden || p.Value != 3.0 || p.Default != 2.0 || *p.Step != 0.5 || *p.Max != 5 {
-		t.Errorf("pared: %+v", p)
+		t.Errorf("wall: %+v", p)
 	}
-	f := got["fuente"]
-	if len(f.Options) != 2 || f.Options[1] != "mono" || f.Doc != "Tipo de letra" || f.Expr != `"sans"` {
-		t.Errorf("fuente: %+v", f)
+	f := got["font"]
+	if len(f.Options) != 2 || f.Options[1] != "mono" || f.Doc != "Typeface" || f.Expr != `"sans"` {
+		t.Errorf("font: %+v", f)
 	}
-	if tp := got["tapa"]; tp.Type != "bool" || tp.Doc != "Imprimir la tapa" {
-		t.Errorf("tapa: %+v", tp)
+	if l := got["lid"]; l.Type != "bool" || l.Doc != "Print the lid" {
+		t.Errorf("lid: %+v", l)
 	}
 	if c := got["color"]; c.Doc != "" {
 		t.Errorf("a # inside a string is not a comment: %+v", c)
@@ -180,16 +180,16 @@ func TestFormatLiteral(t *testing.T) {
 }
 
 func TestParamOptions(t *testing.T) {
-	src := `param modo = "montado" in ["montado", "impresion"] // Vista o piezas
-param dientes = 12 in [8, 12, 16]
-if modo == "impresion" { box(dientes, 1, 1) } else { box(1, 1, 1) }
+	src := `param mode = "assembled" in ["assembled", "print"] // View or separate parts
+param teeth = 12 in [8, 12, 16]
+if mode == "print" { box(teeth, 1, 1) } else { box(1, 1, 1) }
 `
-	res := eval(t, src, map[string]string{"modo": "impresion", "dientes": "16"})
+	res := eval(t, src, map[string]string{"mode": "print", "teeth": "16"})
 	if v := res.Mesh.Volume(); math.Abs(v-16) > 1e-9 {
 		t.Errorf("volume %v", v)
 	}
-	if p := res.Params[0]; len(p.Options) != 2 || p.Doc != "Vista o piezas" {
-		t.Errorf("modo: %+v", p)
+	if p := res.Params[0]; len(p.Options) != 2 || p.Doc != "View or separate parts" {
+		t.Errorf("mode: %+v", p)
 	}
 
 	errs := []struct {
@@ -197,15 +197,15 @@ if modo == "impresion" { box(dientes, 1, 1) } else { box(1, 1, 1) }
 		defs map[string]string
 		want string
 	}{
-		{src, map[string]string{"modo": "impresión"}, `must be one of ["montado", "impresion"]`},
-		{src, map[string]string{"dientes": "10"}, "must be one of [8, 12, 16]"},
-		{`param modo = "otro" in ["a", "b"]` + "\nbox()", nil, "not one of the allowed values"},
-		{`param modo = "a" in []` + "\nbox()", nil, "non-empty list"},
-		{`let modo = "a" in ["a"]` + "\nbox()", nil, "only valid for param"},
-		{`param modo = "montado" in ["montado", "impresion"]` + "\nif modo == \"impresión\" { box() }", nil,
-			`modo is never "impresión"`},
-		{`param modo = "montado" in ["montado", "impresion"]` + "\nif \"montaje\" != modo { box() }", nil,
-			`did you mean "montado"`},
+		{src, map[string]string{"mode": "printing"}, `must be one of ["assembled", "print"]`},
+		{src, map[string]string{"teeth": "10"}, "must be one of [8, 12, 16]"},
+		{`param mode = "other" in ["a", "b"]` + "\nbox()", nil, "not one of the allowed values"},
+		{`param mode = "a" in []` + "\nbox()", nil, "non-empty list"},
+		{`let mode = "a" in ["a"]` + "\nbox()", nil, "only valid for param"},
+		{`param mode = "assembled" in ["assembled", "print"]` + "\nif mode == \"printing\" { box() }", nil,
+			`mode is never "printing"`},
+		{`param mode = "assembled" in ["assembled", "print"]` + "\nif \"assembly\" != mode { box() }", nil,
+			`did you mean "assembled"`},
 	}
 	for _, c := range errs {
 		prog, err := Parse("t", c.src)
@@ -218,8 +218,8 @@ if modo == "impresion" { box(dientes, 1, 1) } else { box(1, 1, 1) }
 	}
 
 	// A local variable with the same name is not the param.
-	ok := `param modo = "a" in ["a", "b"]
-module m(modo) { if modo == "zzz" { box() } else { box(2, 2, 2) } }
+	ok := `param mode = "a" in ["a", "b"]
+module m(mode) { if mode == "zzz" { box() } else { box(2, 2, 2) } }
 m("zzz")
 `
 	if v := eval(t, ok, nil).Mesh.Volume(); math.Abs(v-20*20*20) > 1e-6 {

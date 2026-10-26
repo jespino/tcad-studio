@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -158,32 +158,32 @@
   <div id="brand"><svg><use href="#cube"/></svg>TCAD Studio</div>
   <div id="folder" class="folder-only"><span id="folder-name"></span><span id="folder-dir"></span></div>
   <div class="actions">
-    <button class="btn" id="open-btn" title="Abrir otra carpeta">Abrir carpeta…</button>
-    <button class="btn folder-only" id="close-btn" title="Cerrar la carpeta y volver al inicio">Cerrar</button>
+    <button class="btn" id="open-btn" title="Open another folder">Open folder…</button>
+    <button class="btn folder-only" id="close-btn" title="Close the folder and go back to the start screen">Close</button>
   </div>
 </header>
 
 <main id="work">
-  <section id="left" aria-label="Vista previa">
-    <iframe id="preview" title="Vista previa 3D"></iframe>
+  <section id="left" aria-label="Preview">
+    <iframe id="preview" title="3D preview"></iframe>
   </section>
-  <div id="split" role="separator" aria-orientation="vertical" title="Arrastra para cambiar el tamaño"></div>
-  <section id="right" aria-label="Agente">
+  <div id="split" role="separator" aria-orientation="vertical" title="Drag to resize"></div>
+  <section id="right" aria-label="Agent">
     <div id="agent-bar">
-      <span class="title">Agente</span>
-      <select id="harness" aria-label="Agente"></select>
+      <span class="title">Agent</span>
+      <select id="harness" aria-label="Agent"></select>
       <span class="spacer"></span>
-      <button class="btn" id="restart-btn" hidden title="Reiniciar el agente">Reiniciar</button>
-      <button class="btn" id="stop-btn" hidden>Detener</button>
-      <button class="btn primary" id="start-btn">Iniciar</button>
+      <button class="btn" id="restart-btn" hidden title="Restart the agent">Restart</button>
+      <button class="btn" id="stop-btn" hidden>Stop</button>
+      <button class="btn primary" id="start-btn">Start</button>
     </div>
     <div id="agent-error" class="error"></div>
     <div id="term-wrap">
       <div id="term"></div>
       <div id="agent-empty">
-        <p>Lanza un agente en la carpeta del proyecto y pídele que diseñe o cambie piezas.</p>
-        <p class="muted">Tiene el skill de TCAD, un AGENTS.md con las instrucciones y la herramienta
-          <code>tcad</code>. La vista previa de la izquierda muestra cada fichero que guarda.</p>
+        <p>Start an agent in the project folder and ask it to design or change parts.</p>
+        <p class="muted">It gets the TCAD skill, an AGENTS.md with instructions and the
+          <code>tcad</code> tool. The preview on the left shows every file it saves.</p>
         <div id="harness-grid"></div>
       </div>
     </div>
@@ -193,10 +193,10 @@
 <div id="welcome">
   <div class="card">
     <h1><svg><use href="#cube"/></svg>TCAD Studio</h1>
-    <p>Abre una carpeta para trabajar en ella. TCAD Studio pone allí el skill de TCAD y las
-      instrucciones para el agente: pídele piezas en el panel de la derecha y las verás a la
-      izquierda, en 3D, en cuanto las guarde.</p>
-    <button class="btn primary" id="welcome-open">Abrir carpeta…</button>
+    <p>Open a folder to work in it. TCAD Studio puts the TCAD skill and the agent's
+      instructions there: ask the agent for parts in the right-hand panel and you'll see
+      them on the left, in 3D, as soon as it saves them.</p>
+    <button class="btn primary" id="welcome-open">Open folder…</button>
     <div id="welcome-error" class="error"></div>
     <div id="recent"></div>
   </div>
@@ -204,20 +204,20 @@
 
 <dialog id="browser">
   <header>
-    <h2>Abrir carpeta</h2>
+    <h2>Open folder</h2>
     <form id="b-path">
-      <button class="btn" type="button" id="b-up" title="Carpeta superior">↑</button>
-      <input id="b-input" spellcheck="false" aria-label="Ruta">
-      <button class="btn" type="submit">Ir</button>
+      <button class="btn" type="button" id="b-up" title="Parent folder">↑</button>
+      <input id="b-input" spellcheck="false" aria-label="Path">
+      <button class="btn" type="submit">Go</button>
     </form>
   </header>
   <div id="b-list"></div>
   <div id="b-error" class="error"></div>
   <footer>
     <span class="info" id="b-info"></span>
-    <button class="btn" id="b-mkdir">Nueva carpeta…</button>
-    <button class="btn" id="b-cancel">Cancelar</button>
-    <button class="btn primary" id="b-open">Abrir esta carpeta</button>
+    <button class="btn" id="b-mkdir">New folder…</button>
+    <button class="btn" id="b-cancel">Cancel</button>
+    <button class="btn primary" id="b-open">Open this folder</button>
   </footer>
 </dialog>
 
@@ -250,7 +250,7 @@ function showFolder(folder) {
   document.body.classList.toggle('no-folder', !folder);
   document.title = folder ? folder.name + ' · TCAD Studio' : 'TCAD Studio';
   $('folder-name').textContent = folder?.name ?? '';
-  $('folder-dir').textContent = folder?.dir ?? '';
+  $('folder-dir').textContent = folder ? tilde(folder.dir) : '';
   // A new folder gets a new viewer: reload it.
   if (folder && folder.dir !== previewDir) $('preview').src = '/preview/?v=' + Date.now();
   if (!folder) { $('preview').src = 'about:blank'; renderRecent(); }
@@ -263,16 +263,16 @@ function renderRecent() {
   const list = state?.recent ?? [];
   if (!list.length) return;
   const h = document.createElement('h2');
-  h.textContent = 'Recientes';
+  h.textContent = 'Recent';
   const ul = document.createElement('ul');
   for (const r of list) {
     const li = document.createElement('li');
     const b = document.createElement('button');
     b.disabled = !r.exists;
-    b.title = r.exists ? r.dir : 'Ya no existe';
+    b.title = r.exists ? r.dir : 'No longer exists';
     b.innerHTML = '<span class="name"></span><span class="dir"></span>';
     b.querySelector('.name').textContent = r.name;
-    b.querySelector('.dir').textContent = r.dir;
+    b.querySelector('.dir').textContent = tilde(r.dir);
     b.onclick = () => openFolder(r.dir);
     li.append(b);
     ul.append(li);
@@ -301,12 +301,14 @@ async function chooseFolder() {
   openBrowser(state?.folder ? parentOf(state.folder.dir) : '');
 }
 
+// Paths under the home folder are shown as ~/...
+const tilde = (p) => (state?.home && (p === state.home || p.startsWith(state.home + '/')) ? '~' + p.slice(state.home.length) : p);
 const parentOf = (p) => p.replace(/[\\/][^\\/]*$/, '') || '/';
 
 $('open-btn').onclick = chooseFolder;
 $('welcome-open').onclick = chooseFolder;
 $('close-btn').onclick = async () => {
-  if (running() && !confirm('Se detendrá el agente. ¿Cerrar la carpeta?')) return;
+  if (running() && !confirm('This stops the agent. Close the folder?')) return;
   await api('close', {});
   state = await api('state');
   showFolder(null);
@@ -326,7 +328,7 @@ async function browse(path) {
   }
   $('b-input').value = browsing.path;
   $('b-up').disabled = !browsing.parent;
-  $('b-info').textContent = browsing.models ? `${browsing.models} modelo${browsing.models > 1 ? 's' : ''} .tcad aquí` : '';
+  $('b-info').textContent = browsing.models ? `${browsing.models} .tcad model${browsing.models > 1 ? 's' : ''} here` : '';
   const list = $('b-list');
   list.replaceChildren();
   for (const e of browsing.entries) {
@@ -336,7 +338,7 @@ async function browse(path) {
     if (e.hasModels) {
       const t = document.createElement('span');
       t.className = 'tag';
-      t.textContent = 'modelos .tcad';
+      t.textContent = '.tcad models';
       b.append(t);
     }
     b.onclick = () => browse(e.path);
@@ -346,7 +348,7 @@ async function browse(path) {
     const p = document.createElement('p');
     p.className = 'muted';
     p.style.padding = '8px 10px';
-    p.textContent = 'Sin subcarpetas.';
+    p.textContent = 'No subfolders.';
     list.append(p);
   }
 }
@@ -360,7 +362,7 @@ $('b-up').onclick = () => browsing?.parent && browse(browsing.parent);
 $('b-cancel').onclick = () => browser.close();
 $('b-open').onclick = () => { browser.close(); if (browsing) openFolder(browsing.path); };
 $('b-mkdir').onclick = async () => {
-  const name = prompt('Nombre de la carpeta nueva:');
+  const name = prompt('Name of the new folder:');
   if (!name || !browsing) return;
   try {
     const { path } = await api('mkdir', { path: browsing.path + '/' + name });
@@ -401,7 +403,7 @@ const fit = new FitAddon();
 term.loadAddon(fit);
 term.open($('term'));
 
-let termId = null, exited = false;
+let termId = null, exited = false, starting = false;
 const running = () => termId !== null && !exited;
 
 // Keystrokes go out strictly in order, batched while a request is in flight.
@@ -456,6 +458,7 @@ async function startAgent(harness = $('harness').value) {
   termId = null;
   term.reset();
   showAgent();
+  starting = true;
   try {
     fit.fit();
     const { id } = await api('terminal/start', { harness, cols: term.cols, rows: term.rows });
@@ -465,6 +468,7 @@ async function startAgent(harness = $('harness').value) {
   } catch (e) {
     agentError(e.message);
   }
+  starting = false;
   showAgent();
 }
 
@@ -487,13 +491,13 @@ function renderHarnesses() {
     const o = document.createElement('option');
     o.value = h.id;
     o.disabled = !h.available;
-    o.textContent = h.name + (h.available ? '' : ' (no instalado)');
+    o.textContent = h.name + (h.available ? '' : ' (not installed)');
     sel.append(o);
     const b = document.createElement('button');
     b.className = 'btn';
     b.disabled = !h.available;
     b.textContent = h.name;
-    b.title = h.available ? 'Ejecuta ' + h.command : h.command + ' no está en el PATH';
+    b.title = h.available ? 'Runs ' + h.command : h.command + ' is not on the PATH';
     b.onclick = () => startAgent(h.id);
     grid.append(b);
   }
@@ -520,10 +524,18 @@ async function reattach() {
 const events = new EventSource('/api/events');
 events.onmessage = (ev) => {
   const { name, data } = JSON.parse(ev.data);
-  if (name === 'terminal:data' && data.id === termId) term.write(decode(data.data));
+  if (name === 'terminal:start' && (termId === null || exited) && !starting) {
+    // An agent started elsewhere (another window, the API): show it.
+    term.reset();
+    termId = data.id;
+    exited = false;
+    $('harness').value = data.harness;
+    refit();
+    showAgent();
+  } else if (name === 'terminal:data' && data.id === termId) term.write(decode(data.data));
   else if (name === 'terminal:exit' && data.id === termId) {
     exited = true;
-    term.write(`\r\n\x1b[2m[el proceso terminó con código ${data.code}]\x1b[0m\r\n`);
+    term.write(`\r\n\x1b[2m[process exited with code ${data.code}]\x1b[0m\r\n`);
     showAgent();
   } else if (name === 'folder') {
     if (!data) { termId = null; term.reset(); }

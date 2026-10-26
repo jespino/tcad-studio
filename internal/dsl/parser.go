@@ -186,7 +186,7 @@ func (p *parser) letStmt() (Stmt, error) {
 		return nil, err
 	}
 	s := &LetStmt{P: kw.pos, Name: name.text, Value: val, IsParam: kw.text == "param"}
-	// param modo = "a" in ["a", "b"]
+	// param mode = "a" in ["a", "b"]
 	if p.atKeyword("in") {
 		in := p.next()
 		if !s.IsParam {

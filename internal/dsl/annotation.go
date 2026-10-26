@@ -9,12 +9,12 @@ import (
 // ParamAnnotation is the optional metadata written in the comment after a
 // param, in the style of the OpenSCAD customizer. Ranges are only hints for
 // the viewer's sliders; a closed set of values is part of the language
-// instead (param fuente = "sans" in ["sans", "mono"]), because it is
+// instead (param font = "sans" in ["sans", "mono"]), because it is
 // enforced.
 //
-//	param ancho = 60        // [20:200] Ancho exterior
-//	param pared = 2         // [1:0.5:5]  (min:step:max)
-//	param tapa = true       // Imprimir también la tapa
+//	param width = 60        // [20:200] Outer width
+//	param wall = 2          // [1:0.5:5]  (min:step:max)
+//	param lid = true        // Also print the lid
 type ParamAnnotation struct {
 	Doc  string   `json:"doc,omitempty"`
 	Min  *float64 `json:"min,omitempty"`

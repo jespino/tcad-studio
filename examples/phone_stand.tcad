@@ -1,0 +1,40 @@
+// Phone stand: base, tilted back with braces, and a front stop.
+// The phone faces -Y and leans on the back, which tilts towards +Y.
+param width       = 70   // [40:120] Stand width, X axis (mm)
+param angle       = 65   // [45:85] Tilt of the back from the horizontal (°)
+param phone_thick = 11   // [6:0.5:20] Phone thickness, with its case (mm)
+
+let depth  = 80      // Y axis
+let g      = 5       // plate thickness
+let back_h = 90
+let y0     = -depth/2 + phone_thick + 12  // front edge of the back
+
+// Horizontal length of the braces and the height that goes with it
+let brace_l = 25
+let brace_h = brace_l * tan(angle)
+
+group {
+  // Base
+  box(width, depth, g, radius=1)
+
+  // Back: a plate with its lower front edge at the origin,
+  // rotated about the X axis and placed on top of the base.
+  box(width, g, back_h, radius=1)
+    .move(y=g/2)
+    .rotate(x=-(90 - angle))
+    .move(y=y0, z=g)
+
+  // Rear braces: wedges with the same slope as the back.
+  // A wedge has its vertical face at -X; rotating -90° about Z moves it to +Y.
+  for x in [-width/3, width/3] {
+    wedge(brace_l, 6, brace_h)
+      .rotate(z=-90)
+      .move(x=x, y=y0 + g / sin(angle) + brace_l/2 - 1, z=g)
+  }
+
+  // Front stop
+  box(width, 4, 10, radius=1).move(y=y0 - phone_thick - 2, z=g - 1)
+
+  // Cable slot through the stop and the bottom of the back
+  hole box(14, 2*phone_thick + 20, 20, radius=2).move(y=y0, z=g)
+}

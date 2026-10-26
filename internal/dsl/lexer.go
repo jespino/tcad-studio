@@ -1,5 +1,5 @@
 // Package dsl implements the TCAD language: a small declarative language to
-// describe 3D models by combining Tinkercad-like solids and holes.
+// describe 3D models by combining solids and holes.
 package dsl
 
 import (

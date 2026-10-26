@@ -1,5 +1,5 @@
-// Package cli is the tcad command line: it compiles TCAD model files (a
-// Tinkercad-like CSG language) into STL meshes and PNG previews, imports STL
+// Package cli is the tcad command line: it compiles TCAD model files (a CSG
+// language of solids and holes) into STL meshes and PNG previews, imports STL
 // files and serves the live viewer. TCAD Studio runs it too, so the agent in
 // its terminal has the same tcad commands.
 package cli
@@ -32,7 +32,7 @@ import (
 	"github.com/jespino/tcad-studio/internal/watch"
 )
 
-const usage = `tcad - build 3D models from TCAD files (Tinkercad-like CSG language)
+const usage = `tcad - build 3D models from TCAD files (a CSG language of solids and holes)
 
 Usage:
   tcad build  [flags] model.tcad   generate an STL file
@@ -42,7 +42,7 @@ Usage:
   tcad watch  [flags] path...      live 3D viewer in the browser, rebuilt on every save
                                    (paths: .tcad files and directories)
   tcad studio [flags] [folder]     TCAD Studio in the browser: live preview + agent terminal
-  tcad import [flags] pieza.stl    convert an STL file into a TCAD model
+  tcad import [flags] part.stl     convert an STL file into a TCAD model
   tcad shapes                      list every primitive and its parameters
 
 Common flags:

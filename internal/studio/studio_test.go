@@ -16,6 +16,19 @@ import (
 	"time"
 )
 
+// fakeDialogs answers the save dialog with a fixed path.
+type fakeDialogs struct {
+	save    string
+	gotDir  *string
+	gotName *string
+}
+
+func (fakeDialogs) ChooseDirectory(title, start string) (string, error) { return "", nil }
+func (d fakeDialogs) SaveFile(title, dir, name string) (string, error) {
+	*d.gotDir, *d.gotName = dir, name
+	return d.save, nil
+}
+
 func TestStudio(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses /bin/sh")
@@ -101,20 +114,26 @@ func TestStudio(t *testing.T) {
 		}
 	}
 
+	// With native dialogs, the preview saves STLs wherever the user picks.
+	saved := filepath.Join(t.TempDir(), "copy") // the extension is added
+	var gotDir, gotName string
+	st.SetDialogs(fakeDialogs{save: saved, gotDir: &gotDir, gotName: &gotName})
+
 	// Opening a folder writes the agent context and serves its preview.
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "pieza.tcad"), []byte("box(10, 10, 10)\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "part.tcad"), []byte("box(10, 10, 10)\n"), 0o644)
 	if r, out := post("/api/open", map[string]string{"path": dir}); r.StatusCode != http.StatusOK || out["dir"] != dir {
 		t.Fatalf("open: %d %v", r.StatusCode, out)
 	}
-	for _, f := range []string{"AGENTS.md", "CLAUDE.md", ".claude/skills/tcad/SKILL.md", ".claude/skills/tcad/reference.md"} {
+	for _, f := range []string{"AGENTS.md", "CLAUDE.md", ".agents/skills/tcad/SKILL.md", ".claude/skills/tcad/reference.md"} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("missing %s", f)
 		}
 	}
 	var state struct {
-		Model string `json:"model"`
-		OK    bool   `json:"ok"`
+		Model   string `json:"model"`
+		OK      bool   `json:"ok"`
+		CanSave bool   `json:"canSave"`
 	}
 	for deadline := time.Now().Add(10 * time.Second); !state.OK; time.Sleep(50 * time.Millisecond) {
 		if time.Now().After(deadline) {
@@ -127,8 +146,18 @@ func TestStudio(t *testing.T) {
 		json.NewDecoder(r.Body).Decode(&state)
 		r.Body.Close()
 	}
-	if state.Model != "pieza.tcad" {
-		t.Fatalf("preview model %q", state.Model)
+	if state.Model != "part.tcad" || !state.CanSave {
+		t.Fatalf("preview state %+v", state)
+	}
+	r, out := post("/preview/api/save", nil)
+	if r.StatusCode != http.StatusOK || out["path"] != saved+".stl" {
+		t.Fatalf("save: %d %v", r.StatusCode, out)
+	}
+	if gotDir != dir || gotName != "part.stl" {
+		t.Fatalf("the dialog started in %q with %q", gotDir, gotName)
+	}
+	if b, err := os.ReadFile(saved + ".stl"); err != nil || len(b) != 84+50*12 {
+		t.Fatalf("saved STL: %d bytes, %v", len(b), err)
 	}
 	// What the user sees is written for the agent.
 	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
@@ -142,7 +171,7 @@ func TestStudio(t *testing.T) {
 	}
 
 	// The agent runs in the folder with tcad on its PATH.
-	r, out := post("/api/terminal/start", map[string]any{"harness": "shell", "cols": 80, "rows": 24})
+	r, out = post("/api/terminal/start", map[string]any{"harness": "shell", "cols": 80, "rows": 24})
 	if r.StatusCode != http.StatusOK {
 		t.Fatalf("terminal: %v", out)
 	}

@@ -56,7 +56,10 @@ import (
 var content embed.FS
 
 // Events sent to the page, besides terminal.EventData and terminal.EventExit.
-const EventFolder = "folder" // payload: *Folder (nil when closed)
+const (
+	EventFolder        = "folder"         // payload: *Folder (nil when closed)
+	EventTerminalStart = "terminal:start" // payload: {id, harness}
+)
 
 const cookieName = "tcad_studio"
 
@@ -65,6 +68,9 @@ const cookieName = "tcad_studio"
 type Dialogs interface {
 	// ChooseDirectory returns "" if the user cancels.
 	ChooseDirectory(title, start string) (string, error)
+	// SaveFile asks where to save a file, starting in dir with name
+	// suggested. It returns "" if the user cancels.
+	SaveFile(title, dir, name string) (string, error)
 }
 
 // Options configures the studio.
@@ -95,6 +101,7 @@ type Studio struct {
 	preview *watch.Server
 	dialogs Dialogs
 	hosts   []string // Host headers accepted (the listen address)
+	saveDir string   // where the last STL was saved
 	subs    map[chan []byte]struct{}
 	ln      net.Listener
 
@@ -150,7 +157,8 @@ func New(opts Options) *Studio {
 	return s
 }
 
-// SetDialogs installs native dialogs.
+// SetDialogs installs native dialogs. Call it before opening a folder: the
+// preview of a folder opened with dialogs saves STLs through them.
 func (s *Studio) SetDialogs(d Dialogs) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -216,7 +224,7 @@ func (s *Studio) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !s.validToken(c.Value) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprintln(w, "TCAD Studio: abre la dirección completa (con ?token=...) que muestra al arrancar.")
+		fmt.Fprintln(w, "TCAD Studio: open the full address (with ?token=...) it prints when it starts.")
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -258,12 +266,18 @@ func (s *Studio) Open(dir string) (*Folder, error) {
 	if err := agentctx.Write(dir, tcad.Skill, tcad.SkillDir); err != nil {
 		return nil, fmt.Errorf("writing the agent context: %w", err)
 	}
-	pv, err := watch.New(watch.Options{
+	opts := watch.Options{
 		Paths: []string{dir}, Recursive: true, Base: dir, Follow: true,
 		Build:   model.WatchBuild,
 		OnState: func(data []byte) { s.queuePreview(dir, data) },
 		Log:     s.opts.Log,
-	})
+	}
+	s.mu.Lock()
+	if s.dialogs != nil {
+		opts.Save = s.saveSTL
+	}
+	s.mu.Unlock()
+	pv, err := watch.New(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +368,34 @@ func (s *Studio) writePreviews() {
 	}
 }
 
+// saveSTL asks where to save a model's STL and writes it there. The dialog
+// starts where the last STL went, or next to the model.
+func (s *Studio) saveSTL(file, name string, stl []byte) (string, error) {
+	s.mu.Lock()
+	d, dir := s.dialogs, s.saveDir
+	s.mu.Unlock()
+	if d == nil {
+		return "", errors.New("no native dialogs in this shell")
+	}
+	if dir == "" {
+		dir = filepath.Dir(file)
+	}
+	path, err := d.SaveFile("Save STL", dir, name)
+	if err != nil || path == "" {
+		return "", err
+	}
+	if !strings.EqualFold(filepath.Ext(path), ".stl") {
+		path += ".stl"
+	}
+	if err := writeAtomic(path, stl); err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	s.saveDir = filepath.Dir(path)
+	s.mu.Unlock()
+	return path, nil
+}
+
 // ---- Agent terminal ------------------------------------------------------------
 
 // linkTCAD makes a folder with a "tcad" link to the program, for the
@@ -406,7 +448,13 @@ func (s *Studio) startTerminal(harness string, cols, rows int) (string, error) {
 	if s.binDir != "" {
 		env = append(env, "PATH="+s.binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
-	return s.terms.Start(*h, f.Dir, env, cols, rows)
+	id, err := s.terms.Start(*h, f.Dir, env, cols, rows)
+	if err == nil {
+		// Other pages (or the one that asked, before it gets the reply)
+		// attach to it if they show no agent.
+		s.send(EventTerminalStart, map[string]string{"id": id, "harness": h.ID})
+	}
+	return id, err
 }
 
 // ---- Events ------------------------------------------------------------------
@@ -550,7 +598,7 @@ func (s *Studio) handleChoose(w http.ResponseWriter, r *http.Request) {
 	if f := s.current(); f != nil {
 		start = filepath.Dir(f.Dir)
 	}
-	path, err := d.ChooseDirectory("Abrir carpeta", start)
+	path, err := d.ChooseDirectory("Open folder", start)
 	if err != nil {
 		fail(w, err)
 		return

@@ -56,7 +56,7 @@ type Options struct {
 	Paths     []string
 	Recursive bool
 	// Base, when set, is the folder the page names models relative to
-	// ("piezas/tapa.tcad" instead of the full path).
+	// ("parts/lid.tcad" instead of the full path).
 	Base string
 	// Follow switches the page to a model as soon as it is created or saved
 	// (by an agent, another editor...), so it shows the file being edited.
@@ -73,6 +73,11 @@ type Options struct {
 	// OnState receives the state sent to the page (JSON) after every change.
 	// It is called with the server locked, so it must not block.
 	OnState func(state []byte)
+	// Save, when set, saves the STL of the model shown somewhere the user
+	// picks (a native dialog in the desktop app) and returns the path, or ""
+	// if the user cancels. The page then offers "Save STL…" instead of a
+	// download. file is the model file; name, the suggested STL name.
+	Save func(file, name string, stl []byte) (string, error)
 	// Ready is called with the URL once Run is listening.
 	Ready func(url string)
 	Log   io.Writer
@@ -94,7 +99,8 @@ type status struct {
 	BuildMs    int64      `json:"buildMs"`
 	Time       string     `json:"time"`
 	HasModel   bool       `json:"hasModel"`
-	ModelStamp int        `json:"modelStamp"` // version of the last good model
+	CanSave    bool       `json:"canSave,omitempty"` // POST api/save opens a save dialog
+	ModelStamp int        `json:"modelStamp"`        // version of the last good model
 	// Params come from the last successful build; Overrides are the values
 	// set from the page or with -D, as TCAD expressions.
 	Params    []dsl.ParamValue  `json:"params"`
@@ -185,6 +191,7 @@ func New(opts Options) (*Server, error) {
 	s.mux.HandleFunc("/api/state", s.handleState)
 	s.mux.HandleFunc("/api/params", s.handleParams)
 	s.mux.HandleFunc("/api/model", s.handleModelSelect)
+	s.mux.HandleFunc("/api/save", s.handleSave)
 	return s, nil
 }
 
@@ -360,6 +367,7 @@ func (s *Server) broadcast() {
 
 func (s *Server) stateJSON() []byte {
 	s.st.Overrides = maps.Clone(s.overrides)
+	s.st.CanSave = s.opts.Save != nil
 	data, _ := json.Marshal(s.st)
 	return data
 }
@@ -554,12 +562,17 @@ func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// stlName is the suggested file name of the model's STL. Callers hold s.mu.
+func (s *Server) stlName() string {
+	if s.st.Output != "" {
+		return s.st.Output
+	}
+	return strings.TrimSuffix(s.st.File, filepath.Ext(s.st.File)) + ".stl"
+}
+
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	data, name := s.plain, s.st.Output
-	if name == "" {
-		name = strings.TrimSuffix(s.st.File, filepath.Ext(s.st.File)) + ".stl"
-	}
+	data, name := s.plain, s.stlName()
 	s.mu.Unlock()
 	if data == nil {
 		http.Error(w, "no model built yet", http.StatusNotFound)
@@ -568,6 +581,43 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "model/stl")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 	w.Write(data)
+}
+
+// handleSave saves the STL of the model shown through Options.Save:
+//
+//	POST /api/save → {"path": "/where/it/went.stl"} ("" if cancelled)
+func (s *Server) handleSave(w http.ResponseWriter, r *http.Request) {
+	reply := func(code int, v any) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(v)
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		reply(http.StatusMethodNotAllowed, map[string]string{"error": "use POST"})
+		return
+	}
+	if s.opts.Save == nil {
+		reply(http.StatusNotFound, map[string]string{"error": "saving is not available here; use download.stl"})
+		return
+	}
+	s.mu.Lock()
+	data, name, file := s.plain, s.stlName(), s.file(s.model)
+	s.mu.Unlock()
+	if data == nil {
+		reply(http.StatusConflict, map[string]string{"error": "no model built yet"})
+		return
+	}
+	// The dialog blocks until the user answers: s.mu is not held.
+	path, err := s.opts.Save(file, name, data)
+	if err != nil {
+		reply(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if path != "" {
+		s.logger.Printf("%s: saved %s", filepath.Base(file), path)
+	}
+	reply(http.StatusOK, map[string]string{"path": path})
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -633,7 +683,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 
 // handleParams changes param overrides:
 //
-//	PUT    /api/params  {"ancho": "80", "nombre": "\"Ana\"", "alto": null}
+//	PUT    /api/params  {"width": "80", "name": "\"Ana\"", "height": null}
 //	DELETE /api/params  (back to the values in the file)
 //
 // Values are TCAD expressions, like -D; null removes an override. The model
@@ -720,7 +770,7 @@ func (s *Server) handleParams(w http.ResponseWriter, r *http.Request) {
 // handleModelSelect picks the model shown:
 //
 //	GET /api/model                                     {"model": ..., "models": [...]}
-//	PUT /api/model  {"model": "diseños/pieza.tcad"}
+//	PUT /api/model  {"model": "designs/part.tcad"}
 //
 // The model must be one of the listed ones. Each model keeps its own param
 // overrides while switching between them.

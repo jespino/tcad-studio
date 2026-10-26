@@ -126,7 +126,7 @@ func withDefault(p Param, d any) Param { p.Default = d; return p }
 func init() {
 	register(&Primitive{
 		Name: "box",
-		Doc:  "Rectangular box. A radius > 0 rounds every edge like Tinkercad's Box.",
+		Doc:  "Rectangular box. A radius > 0 rounds every edge.",
 		Params: []Param{pLength, pWidth, pHeight,
 			{Name: "radius", Default: 0.0, Aliases: []string{"r"}, Doc: "edge rounding radius"},
 			withDefault(pSteps, 8.0)},

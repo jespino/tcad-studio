@@ -1,4 +1,4 @@
-// Command tcad compiles TCAD model files (a Tinkercad-like CSG language) into
+// Command tcad compiles TCAD model files (a CSG language of solids and holes) into
 // STL meshes and PNG previews. See internal/cli.
 package main
 

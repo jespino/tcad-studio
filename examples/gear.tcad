@@ -1,0 +1,28 @@
+// Simple spur gear with a hexagonal shaft hole.
+param teeth     = 18  // [6:1:40] Number of teeth
+param radius    = 20  // [10:50] Body radius (mm)
+param thickness = 6   // [2:20] Thickness (mm)
+param shaft     = 4   // [2:0.5:8] Radius of the shaft hexagon
+
+let $sides = 64
+let tooth_h = 3.5
+let tooth_w = 2 * PI * radius / teeth / 2
+
+group {
+  cylinder(radius=radius, height=thickness)
+  for i in range(teeth) {
+    // Each tooth is an extruded trapezoid, placed on the rim and rotated.
+    extrude(points=[[-tooth_w/2, 0], [tooth_w/2, 0],
+                    [tooth_w/4, tooth_h], [-tooth_w/4, tooth_h]],
+            height=thickness)
+      .move(y=radius - 0.5)
+      .rotate(z=i * 360 / teeth)
+  }
+  // Lightening holes
+  for i in range(5) {
+    hole cylinder(radius=4, height=thickness + 2).move(x=radius * 0.55, z=-1).rotate(z=i * 72)
+  }
+  hole polygon(sides=6, radius=shaft, height=thickness + 2).move(z=-1)
+  // Reinforcement around the shaft
+  tube(radius=shaft + 3, wall=2, height=thickness + 1)
+}

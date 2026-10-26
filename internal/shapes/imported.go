@@ -48,10 +48,10 @@ func loadSTL(path string) (*geom.Mesh, error) {
 func init() {
 	register(&Primitive{
 		Name: "stl",
-		Doc:  "Imports an STL file (like Tinkercad's Import). Relative paths are relative to the .tcad file.",
+		Doc:  "Imports an STL file. Relative paths are relative to the .tcad file.",
 		Params: []Param{
 			{Name: "file", Default: "", IsPath: true, Doc: "path of the STL file"},
-			{Name: "center", Default: true, Doc: "true: center in XY and rest on z = 0 like Tinkercad; false: keep the original coordinates"},
+			{Name: "center", Default: true, Doc: "true: center in XY and rest on z = 0; false: keep the original coordinates"},
 		},
 		KeepCoords: true,
 		build: func(a Args) (*geom.Mesh, error) {

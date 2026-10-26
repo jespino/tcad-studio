@@ -1,6 +1,6 @@
 // Package shapes generates the triangle meshes of the basic primitives.
 //
-// Every primitive follows the Tinkercad convention: it is centered on the X
+// Every primitive follows the same convention: it is centered on the X
 // and Y axes and rests on the workplane (its lowest point is at z = 0).
 // X is length, Y is width and Z is height.
 package shapes
