@@ -4,16 +4,22 @@ param width     = 40   // [30:150] Outer width, Y axis (mm)
 param height    = 30   // [10:100] Height of the box without the lid (mm)
 param wall      = 2    // [1.2:0.2:4] Wall thickness (mm)
 param clearance = 0.3  // [0:0.05:0.8] Gap between the lid's lip and the box (mm)
+param label      = "Box" // Text engraved on the front face
+param label_size = 10   // [5:30] Height of the engraved text (mm)
+param label_depth = 0.8 // [0.4:0.1:1.2] Engraving depth, less than the wall (mm)
 
 let $sides = 48
 let corner = 3
 let inner_l = length - 2*wall
 let inner_w = width - 2*wall
 
-// Box: rounded solid minus the inside.
+// Box: rounded solid minus the inside, with the label engraved on the
+// front face (-Y). The text pokes 1 mm out of the face so it cuts cleanly.
 group {
   box(length, width, height, radius=corner)
   hole box(inner_l, inner_w, height, radius=1).move(z=wall)
+  hole text(label, size=label_size, height=label_depth + 1, font="sans-bold")
+    .rotate(x=90).move(y=-width/2 + label_depth, z=height/2)
 }
 
 // Lid: a plate plus a hollow lip that fits into the box's opening.
