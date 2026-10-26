@@ -23,3 +23,10 @@
 .vscode/
 *.swp
 .DS_Store
+
+# Agent files TCAD Studio writes when it opens examples/
+/examples/AGENTS.md
+/examples/CLAUDE.md
+/examples/GEMINI.md
+/examples/.agents/
+/examples/.claude/
