@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCAD Studio</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/xterm.css">
+<style>
+  :root {
+    --bg: #e9edf2; --bar: #f7f8fa; --panel: #ffffff; --border: rgba(20, 30, 50, 0.12);
+    --text: #1d2430; --muted: #5d6879; --accent: #2563eb; --accent-text: #ffffff;
+    --btn: #f1f3f7; --btn-hover: #e4e8ef; --err: #c62f2f; --ok: #1f8a4c;
+    --term-bg: #15181d; --term-fg: #e3e7ee; --shadow: 0 10px 40px rgba(10, 20, 40, 0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111317; --bar: #1a1d23; --panel: #1f232a; --border: rgba(255, 255, 255, 0.09);
+      --text: #e7ebf1; --muted: #9aa4b2; --accent: #7aa2ff; --accent-text: #0d1426;
+      --btn: #2a303b; --btn-hover: #343b48; --err: #f87171; --ok: #4ade80;
+      --term-bg: #121418; --term-fg: #e3e7ee; --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text); background: var(--bg); display: flex; flex-direction: column;
+  }
+  button, select, input { font: inherit; color: inherit; }
+  .btn {
+    background: var(--btn); border: 1px solid var(--border); border-radius: 7px;
+    padding: 4px 11px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { background: var(--btn-hover); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .muted { color: var(--muted); }
+  .error { color: var(--err); }
+
+  /* ---- Top bar ---- */
+  #bar {
+    flex: none; display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+    background: var(--bar); border-bottom: 1px solid var(--border);
+  }
+  #brand { display: flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: 0.01em; }
+  #brand svg { width: 20px; height: 20px; color: var(--accent); }
+  #folder { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1; }
+  #folder-name { font-weight: 600; }
+  #folder-dir { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #bar .actions { display: flex; gap: 6px; }
+
+  /* ---- Work area ---- */
+  #work { flex: 1; min-height: 0; display: flex; }
+  #left { flex: none; width: 60%; min-width: 280px; position: relative; }
+  #preview { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+  #split {
+    flex: none; width: 6px; cursor: col-resize; background: var(--bar);
+    border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  }
+  #split:hover, #split.drag { background: var(--accent); }
+  body.dragging iframe { pointer-events: none; }
+  body.dragging { cursor: col-resize; user-select: none; }
+  #right { flex: 1; min-width: 300px; display: flex; flex-direction: column; background: var(--term-bg); }
+
+  /* ---- Agent panel ---- */
+  #agent-bar {
+    flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    background: var(--bar); border-bottom: 1px solid var(--border);
+  }
+  #agent-bar .title { font-weight: 600; }
+  #agent-bar select {
+    background: var(--btn); border: 1px solid var(--border); border-radius: 7px; padding: 3px 6px;
+  }
+  #agent-bar .spacer { flex: 1; }
+  #agent-error { flex: none; padding: 6px 12px; background: var(--bar); display: none; }
+  #term-wrap { flex: 1; min-height: 0; position: relative; }
+  #term { position: absolute; inset: 6px 4px 4px 10px; }
+  #agent-empty {
+    position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; padding: 24px;
+    text-align: center; color: var(--term-fg); background: var(--term-bg);
+  }
+  #agent-empty p { margin: 0; max-width: 420px; }
+  #agent-empty .muted { color: #9aa4b2; font-size: 12px; }
+  #harness-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+  #harness-grid .btn { background: #262b34; border-color: rgba(255, 255, 255, 0.12); color: var(--term-fg); padding: 7px 14px; }
+  #harness-grid .btn:hover:not(:disabled) { background: #313744; }
+
+  /* ---- Welcome ---- */
+  #welcome {
+    position: fixed; inset: 0; display: none; place-items: center; background: var(--bg); z-index: 5; overflow: auto;
+  }
+  body.no-folder #welcome { display: grid; }
+  body.no-folder #work, body.no-folder #bar .folder-only { display: none; }
+  .card {
+    width: min(560px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow); padding: 28px 30px;
+  }
+  .card h1 { margin: 0 0 6px; font-size: 22px; display: flex; align-items: center; gap: 10px; }
+  .card h1 svg { width: 28px; height: 28px; color: var(--accent); }
+  .card > p { margin: 0 0 18px; color: var(--muted); }
+  #recent h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 22px 0 6px; }
+  #recent ul { list-style: none; margin: 0; padding: 0; }
+  #recent li button {
+    width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 10px; cursor: pointer;
+    display: flex; flex-direction: column;
+  }
+  #recent li button:hover:not(:disabled) { background: var(--btn); }
+  #recent li button:disabled { opacity: 0.45; cursor: default; }
+  #recent .name { font-weight: 600; }
+  #recent .dir { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #welcome-error { margin-top: 12px; }
+
+  /* ---- Folder browser (when there are no native dialogs) ---- */
+  dialog {
+    width: min(620px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 48px)); padding: 0;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); box-shadow: var(--shadow);
+  }
+  dialog[open] { display: flex; flex-direction: column; }
+  dialog::backdrop { background: rgba(10, 15, 25, 0.45); }
+  dialog header { padding: 14px 18px 8px; }
+  dialog h2 { margin: 0 0 8px; font-size: 15px; }
+  #b-path { display: flex; gap: 6px; }
+  #b-path input {
+    flex: 1; min-width: 0; background: var(--btn); border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+  }
+  #b-list { flex: 1; min-height: 160px; overflow: auto; margin: 0 10px; padding: 4px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  #b-list button {
+    width: 100%; text-align: left; background: none; border: 0; border-radius: 7px; padding: 6px 10px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #b-list button:hover { background: var(--btn); }
+  #b-list .tag { margin-left: auto; font-size: 11px; color: var(--accent); }
+  dialog footer { display: flex; align-items: center; gap: 8px; padding: 12px 18px; }
+  dialog footer .info { flex: 1; color: var(--muted); font-size: 12px; }
+  #b-error { padding: 0 18px; }
+
+  @media (max-width: 800px) {
+    #work { flex-direction: column; }
+    #left { width: auto !important; height: 55%; min-width: 0; }
+    #split { display: none; }
+    #right { min-width: 0; }
+    #folder-dir { display: none; }
+  }
+</style>
+</head>
+<body class="no-folder">
+
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+    <path d="M12 2.8 20.5 7.5v9L12 21.2 3.5 16.5v-9z"/><path d="M3.5 7.5 12 12.2l8.5-4.7M12 12.2v9"/>
+  </symbol>
+</svg>
+
+<header id="bar">
+  <div id="brand"><svg><use href="#cube"/></svg>TCAD Studio</div>
+  <div id="folder" class="folder-only"><span id="folder-name"></span><span id="folder-dir"></span></div>
+  <div class="actions">
+    <button class="btn" id="open-btn" title="Abrir otra carpeta">Abrir carpeta…</button>
+    <button class="btn folder-only" id="close-btn" title="Cerrar la carpeta y volver al inicio">Cerrar</button>
+  </div>
+</header>
+
+<main id="work">
+  <section id="left" aria-label="Vista previa">
+    <iframe id="preview" title="Vista previa 3D"></iframe>
+  </section>
+  <div id="split" role="separator" aria-orientation="vertical" title="Arrastra para cambiar el tamaño"></div>
+  <section id="right" aria-label="Agente">
+    <div id="agent-bar">
+      <span class="title">Agente</span>
+      <select id="harness" aria-label="Agente"></select>
+      <span class="spacer"></span>
+      <button class="btn" id="restart-btn" hidden title="Reiniciar el agente">Reiniciar</button>
+      <button class="btn" id="stop-btn" hidden>Detener</button>
+      <button class="btn primary" id="start-btn">Iniciar</button>
+    </div>
+    <div id="agent-error" class="error"></div>
+    <div id="term-wrap">
+      <div id="term"></div>
+      <div id="agent-empty">
+        <p>Lanza un agente en la carpeta del proyecto y pídele que diseñe o cambie piezas.</p>
+        <p class="muted">Tiene el skill de TCAD, un AGENTS.md con las instrucciones y la herramienta
+          <code>tcad</code>. La vista previa de la izquierda muestra cada fichero que guarda.</p>
+        <div id="harness-grid"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="welcome">
+  <div class="card">
+    <h1><svg><use href="#cube"/></svg>TCAD Studio</h1>
+    <p>Abre una carpeta para trabajar en ella. TCAD Studio pone allí el skill de TCAD y las
+      instrucciones para el agente: pídele piezas en el panel de la derecha y las verás a la
+      izquierda, en 3D, en cuanto las guarde.</p>
+    <button class="btn primary" id="welcome-open">Abrir carpeta…</button>
+    <div id="welcome-error" class="error"></div>
+    <div id="recent"></div>
+  </div>
+</div>
+
+<dialog id="browser">
+  <header>
+    <h2>Abrir carpeta</h2>
+    <form id="b-path">
+      <button class="btn" type="button" id="b-up" title="Carpeta superior">↑</button>
+      <input id="b-input" spellcheck="false" aria-label="Ruta">
+      <button class="btn" type="submit">Ir</button>
+    </form>
+  </header>
+  <div id="b-list"></div>
+  <div id="b-error" class="error"></div>
+  <footer>
+    <span class="info" id="b-info"></span>
+    <button class="btn" id="b-mkdir">Nueva carpeta…</button>
+    <button class="btn" id="b-cancel">Cancelar</button>
+    <button class="btn primary" id="b-open">Abrir esta carpeta</button>
+  </footer>
+</dialog>
+
+<script type="module">
+import { Terminal } from '/static/xterm.mjs';
+import { FitAddon } from '/static/addon-fit.mjs';
+
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } },
+};
+
+async function api(path, body) {
+  const res = await fetch('/api/' + path, body === undefined ? {} : {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok || data.error) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+let state = null;
+let previewDir = null; // folder the preview iframe shows
+
+// ---- Folder ------------------------------------------------------------
+function showFolder(folder) {
+  if (state) state.folder = folder;
+  document.body.classList.toggle('no-folder', !folder);
+  document.title = folder ? folder.name + ' · TCAD Studio' : 'TCAD Studio';
+  $('folder-name').textContent = folder?.name ?? '';
+  $('folder-dir').textContent = folder?.dir ?? '';
+  // A new folder gets a new viewer: reload it.
+  if (folder && folder.dir !== previewDir) $('preview').src = '/preview/?v=' + Date.now();
+  if (!folder) { $('preview').src = 'about:blank'; renderRecent(); }
+  previewDir = folder?.dir ?? null;
+}
+
+function renderRecent() {
+  const box = $('recent');
+  box.replaceChildren();
+  const list = state?.recent ?? [];
+  if (!list.length) return;
+  const h = document.createElement('h2');
+  h.textContent = 'Recientes';
+  const ul = document.createElement('ul');
+  for (const r of list) {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.disabled = !r.exists;
+    b.title = r.exists ? r.dir : 'Ya no existe';
+    b.innerHTML = '<span class="name"></span><span class="dir"></span>';
+    b.querySelector('.name').textContent = r.name;
+    b.querySelector('.dir').textContent = r.dir;
+    b.onclick = () => openFolder(r.dir);
+    li.append(b);
+    ul.append(li);
+  }
+  box.append(h, ul);
+}
+
+async function openFolder(path) {
+  $('welcome-error').textContent = '';
+  try {
+    showFolder(await api('open', { path }));
+  } catch (e) {
+    $('welcome-error').textContent = e.message;
+    if (state?.folder) alert(e.message);
+  }
+}
+
+async function chooseFolder() {
+  if (state?.native) {
+    try {
+      const { path } = await api('choose', {});
+      if (path) openFolder(path);
+    } catch (e) { $('welcome-error').textContent = e.message; }
+    return;
+  }
+  openBrowser(state?.folder ? parentOf(state.folder.dir) : '');
+}
+
+const parentOf = (p) => p.replace(/[\\/][^\\/]*$/, '') || '/';
+
+$('open-btn').onclick = chooseFolder;
+$('welcome-open').onclick = chooseFolder;
+$('close-btn').onclick = async () => {
+  if (running() && !confirm('Se detendrá el agente. ¿Cerrar la carpeta?')) return;
+  await api('close', {});
+  state = await api('state');
+  showFolder(null);
+};
+
+// ---- In-page folder browser ---------------------------------------------
+const browser = $('browser');
+let browsing = null;
+
+async function browse(path) {
+  $('b-error').textContent = '';
+  try {
+    browsing = await api('dirs?path=' + encodeURIComponent(path));
+  } catch (e) {
+    $('b-error').textContent = e.message;
+    return;
+  }
+  $('b-input').value = browsing.path;
+  $('b-up').disabled = !browsing.parent;
+  $('b-info').textContent = browsing.models ? `${browsing.models} modelo${browsing.models > 1 ? 's' : ''} .tcad aquí` : '';
+  const list = $('b-list');
+  list.replaceChildren();
+  for (const e of browsing.entries) {
+    const b = document.createElement('button');
+    b.innerHTML = '<span>📁</span><span class="n"></span>';
+    b.querySelector('.n').textContent = e.name;
+    if (e.hasModels) {
+      const t = document.createElement('span');
+      t.className = 'tag';
+      t.textContent = 'modelos .tcad';
+      b.append(t);
+    }
+    b.onclick = () => browse(e.path);
+    list.append(b);
+  }
+  if (!browsing.entries.length) {
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.style.padding = '8px 10px';
+    p.textContent = 'Sin subcarpetas.';
+    list.append(p);
+  }
+}
+
+function openBrowser(start) {
+  browser.showModal();
+  browse(start || state?.home || '');
+}
+$('b-path').onsubmit = (e) => { e.preventDefault(); browse($('b-input').value); };
+$('b-up').onclick = () => browsing?.parent && browse(browsing.parent);
+$('b-cancel').onclick = () => browser.close();
+$('b-open').onclick = () => { browser.close(); if (browsing) openFolder(browsing.path); };
+$('b-mkdir').onclick = async () => {
+  const name = prompt('Nombre de la carpeta nueva:');
+  if (!name || !browsing) return;
+  try {
+    const { path } = await api('mkdir', { path: browsing.path + '/' + name });
+    browse(path);
+  } catch (e) { $('b-error').textContent = e.message; }
+};
+
+// ---- Resizable split ----------------------------------------------------
+const left = $('left');
+left.style.width = store.get('tcad:split', '60') + '%';
+$('split').onpointerdown = (e) => {
+  e.preventDefault();
+  const split = $('split');
+  split.setPointerCapture(e.pointerId);
+  split.classList.add('drag');
+  document.body.classList.add('dragging');
+  const total = $('work').getBoundingClientRect();
+  split.onpointermove = (ev) => {
+    const pct = Math.min(80, Math.max(25, ((ev.clientX - total.left) / total.width) * 100));
+    left.style.width = pct.toFixed(1) + '%';
+  };
+  split.onpointerup = () => {
+    split.onpointermove = split.onpointerup = null;
+    split.classList.remove('drag');
+    document.body.classList.remove('dragging');
+    store.set('tcad:split', parseFloat(left.style.width));
+  };
+};
+
+// ---- Agent terminal -----------------------------------------------------
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const term = new Terminal({
+  fontFamily: 'ui-monospace, "JetBrains Mono", "Fira Code", Menlo, monospace',
+  fontSize: 13, cursorBlink: true, scrollback: 10000, allowProposedApi: true,
+  theme: { background: css('--term-bg'), foreground: css('--term-fg'), cursor: '#7aa2ff', selectionBackground: 'rgba(110,168,254,0.35)' },
+});
+const fit = new FitAddon();
+term.loadAddon(fit);
+term.open($('term'));
+
+let termId = null, exited = false;
+const running = () => termId !== null && !exited;
+
+// Keystrokes go out strictly in order, batched while a request is in flight.
+let queue = '', flushing = false;
+function send(data) {
+  queue += data;
+  if (flushing || !termId) return;
+  flushing = true;
+  (async () => {
+    while (queue && termId) {
+      const chunk = queue;
+      queue = '';
+      await api('terminal/input', { id: termId, data: chunk }).catch(() => {});
+    }
+    flushing = false;
+  })();
+}
+term.onData(send);
+term.onBinary(send);
+
+function refit() {
+  try { fit.fit(); } catch { return; }
+  if (termId) api('terminal/resize', { id: termId, cols: term.cols, rows: term.rows }).catch(() => {});
+}
+new ResizeObserver(refit).observe($('term-wrap'));
+
+function decode(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function showAgent() {
+  const h = (state?.harnesses ?? []).find((x) => x.id === $('harness').value);
+  $('start-btn').hidden = running();
+  $('start-btn').disabled = !h?.available;
+  $('restart-btn').hidden = $('stop-btn').hidden = !running();
+  $('agent-empty').style.display = termId === null ? '' : 'none';
+}
+
+function agentError(msg) {
+  $('agent-error').textContent = msg || '';
+  $('agent-error').style.display = msg ? 'block' : 'none';
+}
+
+async function startAgent(harness = $('harness').value) {
+  agentError('');
+  $('harness').value = harness;
+  store.set('tcad:harness', harness);
+  if (termId) await api('terminal/stop', { id: termId }).catch(() => {});
+  termId = null;
+  term.reset();
+  showAgent();
+  try {
+    fit.fit();
+    const { id } = await api('terminal/start', { harness, cols: term.cols, rows: term.rows });
+    termId = id;
+    exited = false;
+    term.focus();
+  } catch (e) {
+    agentError(e.message);
+  }
+  showAgent();
+}
+
+async function stopAgent() {
+  if (termId) await api('terminal/stop', { id: termId }).catch(() => {});
+  termId = null;
+  showAgent();
+}
+
+$('start-btn').onclick = () => startAgent();
+$('restart-btn').onclick = () => startAgent();
+$('stop-btn').onclick = stopAgent;
+$('harness').onchange = showAgent;
+
+function renderHarnesses() {
+  const sel = $('harness'), grid = $('harness-grid');
+  sel.replaceChildren();
+  grid.replaceChildren();
+  for (const h of state.harnesses) {
+    const o = document.createElement('option');
+    o.value = h.id;
+    o.disabled = !h.available;
+    o.textContent = h.name + (h.available ? '' : ' (no instalado)');
+    sel.append(o);
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.disabled = !h.available;
+    b.textContent = h.name;
+    b.title = h.available ? 'Ejecuta ' + h.command : h.command + ' no está en el PATH';
+    b.onclick = () => startAgent(h.id);
+    grid.append(b);
+  }
+  const saved = store.get('tcad:harness', 'claude');
+  const pick = state.harnesses.find((h) => h.id === saved && h.available) ?? state.harnesses.find((h) => h.available);
+  if (pick) sel.value = pick.id;
+}
+
+// Reattach to an agent that survived a reload of the page.
+async function reattach() {
+  const t = (state.terminals ?? []).find((x) => x.running);
+  if (!t) return;
+  try {
+    const { data } = await api('terminal/buffer?id=' + encodeURIComponent(t.id));
+    term.write(decode(data));
+    termId = t.id;
+    exited = false;
+    $('harness').value = t.harness;
+    refit();
+  } catch { /* gone meanwhile */ }
+}
+
+// ---- Events -------------------------------------------------------------
+const events = new EventSource('/api/events');
+events.onmessage = (ev) => {
+  const { name, data } = JSON.parse(ev.data);
+  if (name === 'terminal:data' && data.id === termId) term.write(decode(data.data));
+  else if (name === 'terminal:exit' && data.id === termId) {
+    exited = true;
+    term.write(`\r\n\x1b[2m[el proceso terminó con código ${data.code}]\x1b[0m\r\n`);
+    showAgent();
+  } else if (name === 'folder') {
+    if (!data) { termId = null; term.reset(); }
+    showFolder(data);
+    showAgent();
+  }
+};
+
+state = await api('state');
+renderHarnesses();
+showFolder(state.folder);
+renderRecent();
+await reattach();
+showAgent();
+</script>
+</body>
+</html>

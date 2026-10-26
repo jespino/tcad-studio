@@ -1,0 +1,26 @@
+// Catálogo de todas las primitivas, en una rejilla de 4 columnas.
+let paso = 30
+
+
+func cx(i) = (i % 4) * paso - 1.5 * paso
+func cy(i) = -floor(i / 4) * paso + 1.5 * paso
+
+box(20, 20, 20, radius=3).move(cx(0), cy(0)).color("red")
+cylinder(radius=10, height=20, bevel=2, segments=4).move(cx(1), cy(1)).color("orange")
+cone(base_radius=10, top_radius=3, height=20).move(cx(2), cy(2)).color("yellow")
+sphere(radius=10).move(cx(3), cy(3)).color("green")
+
+half_sphere(radius=10).move(cx(4), cy(4)).color("teal")
+torus(radius=8, tube=2.5).move(cx(5), cy(5)).color("cyan")
+tube(radius=10, wall=2, height=20).move(cx(6), cy(6)).color("blue")
+paraboloid(radius=10, height=20).move(cx(7), cy(7)).color("navy")
+
+wedge(20, 20, 20).move(cx(8), cy(8)).color("purple")
+roof(20, 20, 15).move(cx(9), cy(9)).color("magenta")
+round_roof(20, 20, 10).move(cx(10), cy(10)).color("pink")
+pyramid(20, 20, 20).move(cx(11), cy(11)).color("brown")
+
+polygon(sides=6, radius=10, height=10).move(cx(12), cy(12)).color("lime")
+star(points=5, radius=11, inner_radius=5, height=6).move(cx(13), cy(13)).color("yellow")
+heart(20, 20, 6).move(cx(14), cy(14)).color("red")
+icosahedron(radius=11).move(cx(15), cy(15)).color("gray")

@@ -1,0 +1,31 @@
+// Maceta con perfil de revolución, agujeros de drenaje y plato.
+param diametro = 70  // [40:150] Diámetro de la boca (mm)
+param altura   = 65  // [30:150] Altura (mm)
+param pared    = 2   // [1.2:0.2:4] Grosor de pared (mm)
+
+let $sides = 72
+let r_base = diametro / 2 - 8
+let r_boca = diametro / 2
+
+group {
+  // Perfil [radio, z] que se revoluciona alrededor de Z
+  revolve(points=[[0, 0], [r_base, 0], [r_boca, altura - 6], [r_boca + 2, altura - 6],
+                  [r_boca + 2, altura], [0, altura]])
+  hole revolve(points=[[0, pared], [r_base - pared, pared], [r_boca - pared, altura - 6],
+                       [r_boca - pared, altura + 1], [0, altura + 1]])
+  // Drenaje
+  hole cylinder(radius=3, height=10).move(z=-5)
+  for i in range(6) {
+    hole cylinder(radius=2, height=10).move(x=r_base * 0.6, z=-5).rotate(z=i * 60)
+  }
+  // Pies para que el agua salga
+  for i in range(3) {
+    box(12, 4, 2).move(x=r_base - 8, z=-2).rotate(z=i * 120 + 30)
+  }
+}
+
+// Plato
+group {
+  cylinder(radius=r_base + 8, height=8, bevel=1, segments=3)
+  hole cylinder(radius=r_base + 6, height=10).move(z=2)
+}.move(x=diametro + 15).color("brown")

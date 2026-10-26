@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.File}} · tcad watch</title>
+<style>
+  :root {
+    --bg-top: #eef1f5; --bg-bottom: #d9dee6;
+    --panel: rgba(255, 255, 255, 0.95); --panel-border: rgba(20, 30, 50, 0.10);
+    --text: #1d2430; --muted: #5d6879;
+    --ok: #1f8a4c; --err: #c62f2f; --busy: #b7791f; --accent: #2563eb;
+    --btn: #f4f6f9; --btn-hover: #e7ebf1; --btn-on: #dbe6ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-top: #2a2f38; --bg-bottom: #171a20;
+      --panel: rgba(28, 32, 40, 0.95); --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #e7ebf1; --muted: #9aa4b2;
+      --ok: #4ade80; --err: #f87171; --busy: #fbbf24; --accent: #7aa2ff;
+      --btn: #2a303b; --btn-hover: #343b48; --btn-on: #2f3f63;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    background: linear-gradient(var(--bg-top), var(--bg-bottom));
+  }
+  #view { position: fixed; inset: 0; display: block; }
+  .panel {
+    position: fixed; background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 10px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  }
+  #side {
+    position: fixed; top: 12px; left: 12px; width: min(360px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px); display: flex; flex-direction: column; gap: 8px;
+  }
+  #side .panel { position: static; }
+  #info { padding: 10px 14px; }
+  #params { padding: 10px 14px 12px; display: none; min-height: 0; overflow: auto; }
+  #params header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  #params h2 { margin: 0; font-size: 13px; font-weight: 600; }
+  #params header .actions { display: flex; gap: 4px; }
+  .small-btn {
+    font: inherit; font-size: 12px; color: var(--text); background: var(--btn); border: 1px solid var(--panel-border);
+    border-radius: 6px; padding: 2px 8px; cursor: pointer;
+  }
+  .small-btn:hover { background: var(--btn-hover); }
+  .small-btn:disabled { opacity: 0.45; cursor: default; }
+  .param { padding: 7px 0; border-top: 1px solid var(--panel-border); }
+  .param .top { display: flex; align-items: center; gap: 8px; }
+  .param label { font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .param.changed label::after { content: " ●"; color: var(--accent); }
+  .param .reset { visibility: hidden; padding: 0 6px; }
+  .param.changed .reset { visibility: visible; }
+  .param .doc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .param .ctl { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .param input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  .param input[type=number], .param input[type=text], .param select {
+    font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); background: var(--btn);
+    border: 1px solid var(--panel-border); border-radius: 6px; padding: 3px 6px; min-width: 0;
+  }
+  .param input[type=number] { width: 84px; }
+  .param input[type=text], .param select { flex: 1; }
+  .param input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .param .perr { color: var(--err); font-size: 12px; margin-top: 3px; }
+  #copied { color: var(--ok); font-size: 12px; margin-left: 4px; }
+  #info h1 { margin: 0 0 4px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  #file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #model {
+    display: none; flex: 1; min-width: 0; font: inherit; font-weight: 600; color: var(--text);
+    background: var(--btn); border: 1px solid var(--panel-border); border-radius: 6px; padding: 2px 4px;
+  }
+  #info.multi #model { display: block; }
+  #info.multi #file { display: none; }
+  #stats { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; color: #fff; background: var(--busy); }
+  .pill.ok { background: var(--ok); }
+  .pill.err { background: var(--err); }
+  #tools { top: 12px; right: 12px; padding: 6px; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 24px); }
+  #tools button, #tools a {
+    font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--panel-border);
+    border-radius: 7px; padding: 5px 10px; cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  #tools button:hover, #tools a:hover { background: var(--btn-hover); }
+  #tools button[aria-pressed="true"] { background: var(--btn-on); border-color: var(--accent); }
+  kbd { font: 11px ui-monospace, monospace; color: var(--muted); margin-left: 4px; }
+  #error {
+    left: 12px; right: 12px; bottom: 12px; padding: 10px 14px; border-left: 4px solid var(--err);
+    display: none; max-height: 40vh; overflow: auto;
+  }
+  #error strong { color: var(--err); }
+  #error pre { margin: 6px 0 4px; white-space: pre-wrap; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #error .hint { color: var(--muted); }
+  #conn {
+    top: 64px; left: 50%; transform: translateX(-50%); padding: 6px 12px; display: none;
+    color: var(--err); font-weight: 600;
+  }
+  #empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+  @keyframes flash { from { box-shadow: 0 0 0 3px var(--ok); } to { box-shadow: 0 4px 18px rgba(0,0,0,.08); } }
+  #info.flash { animation: flash 0.8s ease-out; }
+  @media (max-width: 1000px) {
+    #side { max-height: calc(100vh - 90px); }
+    #tools { top: auto; bottom: 12px; }
+    #error { bottom: 64px; }
+  }
+  @media (max-width: 600px) {
+    #tools { top: auto; bottom: 12px; right: 12px; left: 12px; justify-content: center; }
+    #error { bottom: 64px; }
+    kbd { display: none; }
+  }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./assets/three.module.min.js", "three/addons/": "./assets/" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="empty">Compilando…</div>
+
+<div id="side">
+  <div id="info" class="panel">
+    <h1><span id="file">{{.File}}</span>
+      <select id="model" aria-label="Modelo" title="Modelo mostrado (N / Mayús+N)"></select>
+      <span id="pill" class="pill">…</span></h1>
+    <div id="stats">Esperando la primera compilación</div>
+  </div>
+  <section id="params" class="panel" aria-label="Parámetros">
+    <header>
+      <h2>Parámetros</h2>
+      <div class="actions">
+        <button id="copycmd" class="small-btn" title="Copiar los valores como opciones -D para tcad build">Copiar -D</button>
+        <button id="resetall" class="small-btn" title="Volver a los valores del fichero">Restablecer</button>
+        <button id="fold" class="small-btn" aria-expanded="true" title="Plegar">–</button>
+      </div>
+    </header>
+    <div id="plist"></div>
+  </section>
+</div>
+
+<div id="tools" class="panel">
+  <button id="fit" title="Encajar el modelo en la vista">Encajar<kbd>F</kbd></button>
+  <button id="edges" aria-pressed="true" title="Mostrar aristas">Aristas<kbd>E</kbd></button>
+  <button id="wire" aria-pressed="false" title="Ver la malla de triángulos">Malla<kbd>W</kbd></button>
+  <button id="grid" aria-pressed="true" title="Mostrar la cama">Cama<kbd>G</kbd></button>
+  <a id="download" href="download.stl" download>Descargar STL</a>
+</div>
+
+<div id="conn" class="panel">Conexión perdida con tcad watch, reintentando…</div>
+
+<div id="error" class="panel">
+  <strong>Error al compilar</strong>
+  <pre id="errtext"></pre>
+  <div class="hint">Se muestra la última versión válida. Corrige el fichero o el parámetro para reintentar.</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/OrbitControls.js';
+import { STLLoader } from 'three/addons/STLLoader.js';
+
+// TCAD uses Z up, like 3D printers.
+THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 10000);
+camera.position.set(120, -150, 110);
+scene.add(camera);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa4b2, 1.6));
+// A light that follows the camera keeps every face readable while orbiting.
+const head = new THREE.DirectionalLight(0xffffff, 1.6);
+head.position.set(-0.4, 0.6, 1);
+head.target.position.set(0, 0, -1);
+camera.add(head, head.target);
+
+const bed = new THREE.Group();
+scene.add(bed);
+function buildBed(extent) {
+  bed.clear();
+  const size = Math.max(200, Math.ceil(extent * 1.6 / 50) * 50);
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const grid = new THREE.GridHelper(size, size / 10, dark ? 0x5b6472 : 0x9aa3b0, dark ? 0x353b45 : 0xc4cad3);
+  grid.rotation.x = Math.PI / 2;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.8;
+  bed.add(grid);
+  bed.add(new THREE.AxesHelper(Math.min(30, size / 8)));
+}
+buildBed(0);
+
+const loader = new STLLoader();
+let mesh = null, edges = null, loadedStamp = -1, fitted = false;
+const state = { edges: true, wire: false, grid: true };
+
+function setModel(geometry) {
+  if (mesh) { scene.remove(mesh, edges); mesh.geometry.dispose(); edges.geometry.dispose(); }
+  // STLLoader already converts the sRGB facet colors to linear space.
+  const material = new THREE.MeshStandardMaterial({
+    color: geometry.hasColors ? 0xffffff : 0xe88a2e,
+    vertexColors: !!geometry.hasColors,
+    roughness: 0.6, metalness: 0.05, wireframe: state.wire,
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+  mesh = new THREE.Mesh(geometry, material);
+  edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25),
+    new THREE.LineBasicMaterial({ color: 0x1b2028, transparent: true, opacity: 0.55 }));
+  edges.visible = state.edges && !state.wire;
+  scene.add(mesh, edges);
+  // The bed is centered on the origin, so it must reach the farthest point.
+  geometry.computeBoundingBox();
+  const { min, max } = geometry.boundingBox;
+  buildBed(2 * Math.max(-min.x, max.x, -min.y, max.y));
+  bed.visible = state.grid;
+  document.getElementById('empty').style.display = 'none';
+  // Keep the user's point of view on reloads; frame it only the first time.
+  if (!fitted) { fit(); fitted = true; }
+}
+
+function clearModel() {
+  if (!mesh) return;
+  scene.remove(mesh, edges);
+  mesh.geometry.dispose(); edges.geometry.dispose();
+  mesh = edges = null;
+}
+
+function fit() {
+  if (!mesh) return;
+  const sphere = mesh.geometry.boundingSphere || (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere);
+  // Fit the narrower of the two angles: panels taller than wide are common.
+  const vfov = THREE.MathUtils.degToRad(camera.fov / 2);
+  const hfov = Math.atan(Math.tan(vfov) * camera.aspect);
+  const dist = sphere.radius / Math.sin(Math.min(vfov, hfov)) * 1.15;
+  const dir = new THREE.Vector3(0.9, -1.2, 0.85).normalize();
+  controls.target.copy(sphere.center);
+  camera.position.copy(sphere.center).addScaledVector(dir, dist);
+  camera.near = Math.max(0.01, dist / 200);
+  camera.far = dist * 200;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+async function loadModel(stamp) {
+  try {
+    const res = await fetch('model.stl?v=' + stamp, { cache: 'no-store' });
+    if (!res.ok) return;
+    const geometry = loader.parse(await res.arrayBuffer());
+    if (stamp < loadedStamp) return; // a newer model arrived meanwhile
+    loadedStamp = stamp;
+    setModel(geometry);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+const fmt = (x, d = 1) => x.toLocaleString('es-ES', { maximumFractionDigits: d });
+function showStatus(st) {
+  const pill = document.getElementById('pill');
+  const info = document.getElementById('info');
+  const empty = document.getElementById('empty');
+  if (!st.model) {
+    // A folder without models yet: the first one that appears is shown.
+    pill.className = 'pill';
+    pill.textContent = 'Sin modelos';
+    document.getElementById('file').textContent = 'Ningún modelo';
+    document.getElementById('stats').textContent = 'Crea un fichero .tcad en la carpeta y aparecerá aquí.';
+    empty.textContent = 'Todavía no hay ningún modelo .tcad';
+    empty.style.display = '';
+    document.getElementById('error').style.display = 'none';
+    return;
+  }
+  // Neither built nor failed: a model that was just picked.
+  const busy = !st.ok && !st.error;
+  pill.className = 'pill ' + (busy ? '' : st.ok ? 'ok' : 'err');
+  pill.textContent = busy ? 'Compilando…' : st.ok ? 'Actualizado ' + st.time : 'Error ' + st.time;
+  if (st.hasModel) {
+    const [x, y, z] = st.size;
+    const tight = st.openEdges === 0 ? 'estanco' : st.openEdges + ' aristas abiertas';
+    document.getElementById('stats').textContent =
+      `${fmt(x, 2)} × ${fmt(y, 2)} × ${fmt(z, 2)} mm · ${fmt(st.volume / 1000, 2)} cm³ · ` +
+      `${st.triangles.toLocaleString('es-ES')} triángulos · ${tight} · ${st.buildMs} ms` +
+      (st.output ? ' · → ' + st.output : '');
+  } else {
+    document.getElementById('stats').textContent = 'Esperando la primera compilación';
+  }
+  const err = document.getElementById('error');
+  err.style.display = st.error ? 'block' : 'none';
+  document.getElementById('errtext').textContent = st.error || '';
+  if (!st.hasModel && st.error) document.getElementById('empty').textContent = 'El modelo todavía no compila';
+  if (st.ok) { info.classList.remove('flash'); void info.offsetWidth; info.classList.add('flash'); }
+}
+
+// ---- Model picker ----------------------------------------------------
+// With several models, the server builds only the one picked here.
+const picker = document.getElementById('model');
+let shownModel = null, modelsSig = '';
+
+const sepAt = (p) => Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+const dirOf = (p) => sepAt(p) < 0 ? '.' : p.slice(0, sepAt(p));
+const baseOf = (p) => p.slice(sepAt(p) + 1);
+
+function showModels(st) {
+  const models = st.models || [];
+  document.getElementById('info').classList.toggle('multi', models.length > 1);
+  const sig = JSON.stringify(models);
+  if (sig !== modelsSig) {
+    modelsSig = sig;
+    // Group by directory when the models come from more than one.
+    const dirs = [...new Set(models.map(dirOf))];
+    const option = (m, label) => {
+      const o = document.createElement('option');
+      o.value = m; o.textContent = label; o.title = m;
+      return o;
+    };
+    if (dirs.length > 1) {
+      picker.replaceChildren(...dirs.map((d) => {
+        const g = document.createElement('optgroup');
+        g.label = d + '/';
+        g.append(...models.filter((m) => dirOf(m) === d).map((m) => option(m, baseOf(m))));
+        return g;
+      }));
+    } else {
+      picker.replaceChildren(...models.map((m) => option(m, baseOf(m))));
+    }
+  }
+  picker.value = st.model;
+  if (st.model !== shownModel) {
+    // A different model: drop the old one and frame the new one.
+    shownModel = st.model;
+    document.getElementById('file').textContent = st.file;
+    document.title = st.file + ' · tcad watch';
+    clearModel();
+    fitted = false;
+    const empty = document.getElementById('empty');
+    empty.textContent = 'Compilando…';
+    empty.style.display = '';
+  }
+}
+
+async function pickModel(model) {
+  if (!model || model === shownModel) return;
+  document.getElementById('pill').className = 'pill';
+  document.getElementById('pill').textContent = 'Compilando…';
+  const res = await fetch('api/model', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model }),
+  });
+  if (!res.ok && lastState) { showModels(lastState); showStatus(lastState); }
+}
+
+picker.onchange = () => { pickModel(picker.value); picker.blur(); };
+
+function stepModel(delta) {
+  const models = lastState?.models || [];
+  if (models.length < 2) return;
+  const i = models.indexOf(shownModel);
+  pickModel(models[(i + delta + models.length) % models.length]);
+}
+
+// ---- Params panel ----------------------------------------------------
+// Values travel to the server as TCAD expressions, exactly like -D.
+const plist = document.getElementById('plist');
+const paramsPanel = document.getElementById('params');
+let paramsSig = '';
+let lastState = null;
+const timers = {};
+
+function literal(p, v) {
+  if (p.type === 'number') return String(v);
+  if (p.type === 'bool') return v ? 'true' : 'false';
+  if (p.type === 'string') return JSON.stringify(v);
+  return v; // lists are typed as TCAD expressions
+}
+
+async function sendParams(body, row) {
+  document.getElementById('pill').className = 'pill';
+  document.getElementById('pill').textContent = 'Compilando…';
+  const res = await fetch('api/params', {
+    method: body === null ? 'DELETE' : 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === null ? undefined : JSON.stringify(body),
+  });
+  const perr = row && row.querySelector('.perr');
+  if (perr) perr.textContent = '';
+  if (!res.ok) {
+    const msg = (await res.json().catch(() => ({}))).error || res.statusText;
+    if (perr) perr.textContent = msg;
+    if (lastState) showStatus(lastState);
+  }
+}
+
+function setParam(p, v, row, delay = 0) {
+  clearTimeout(timers[p.name]);
+  timers[p.name] = setTimeout(() => sendParams({ [p.name]: literal(p, v) }, row), delay);
+}
+
+function stepOf(p) {
+  if (p.step) return p.step;
+  const span = p.min !== undefined && p.max !== undefined ? p.max - p.min : Math.abs(p.default);
+  if (Number.isInteger(p.default) && (span >= 10 || span === 0)) return 1;
+  return span >= 1 ? 0.1 : 0.01;
+}
+
+function buildRow(p) {
+  const row = document.createElement('div');
+  row.className = 'param';
+  row.dataset.name = p.name;
+  const id = 'p-' + p.name;
+  row.innerHTML = `<div class="top"><label for="${id}"></label>
+    <button class="small-btn reset" title="Volver al valor del fichero">↺</button></div>
+    <div class="ctl"></div>`;
+  row.querySelector('label').textContent = p.name;
+  if (p.doc) {
+    const doc = document.createElement('div');
+    doc.className = 'doc';
+    doc.textContent = p.doc;
+    row.querySelector('.top').after(doc);
+  }
+  const perr = document.createElement('div');
+  perr.className = 'perr';
+  row.append(perr);
+  row.querySelector('.reset').onclick = () => sendParams({ [p.name]: null }, row);
+  const ctl = row.querySelector('.ctl');
+
+  if (p.options) {
+    const sel = document.createElement('select');
+    sel.id = id;
+    p.options.forEach((o, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = typeof o === 'string' ? o : JSON.stringify(o);
+      sel.append(opt);
+    });
+    sel.onchange = () => setParam(p, p.options[sel.value], row);
+    ctl.append(sel);
+  } else if (p.type === 'number') {
+    const num = document.createElement('input');
+    num.type = 'number';
+    num.id = id;
+    num.step = stepOf(p);
+    if (p.min !== undefined) {
+      const range = document.createElement('input');
+      range.type = 'range';
+      range.min = p.min; range.max = p.max; range.step = stepOf(p);
+      range.setAttribute('aria-label', p.name);
+      range.oninput = () => { num.value = range.value; setParam(p, Number(range.value), row, 200); };
+      ctl.append(range);
+    }
+    num.oninput = () => {
+      if (num.value === '' || isNaN(Number(num.value))) return;
+      const r = ctl.querySelector('input[type=range]');
+      if (r) r.value = num.value;
+      setParam(p, Number(num.value), row, 500);
+    };
+    ctl.append(num);
+  } else if (p.type === 'bool') {
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = id;
+    cb.onchange = () => setParam(p, cb.checked, row);
+    ctl.append(cb);
+  } else {
+    const txt = document.createElement('input');
+    txt.type = 'text';
+    txt.id = id;
+    txt.spellcheck = false;
+    if (p.type === 'list') txt.title = 'Lista en sintaxis TCAD, por ejemplo [10, 20, 30]';
+    txt.oninput = () => setParam(p, txt.value, row, p.type === 'list' ? 900 : 500);
+    txt.onkeydown = (e) => { if (e.key === 'Enter') setParam(p, txt.value, row); };
+    ctl.append(txt);
+  }
+  return row;
+}
+
+// Refreshes the shown values without touching the control being edited.
+function fillRow(row, p) {
+  row.classList.toggle('changed', p.overridden);
+  const active = document.activeElement;
+  for (const el of row.querySelectorAll('input, select')) {
+    if (el === active) continue;
+    if (el.tagName === 'SELECT') {
+      const i = p.options.findIndex((o) => JSON.stringify(o) === JSON.stringify(p.value));
+      if (i >= 0) el.value = i;
+    } else if (el.type === 'checkbox') el.checked = p.value;
+    else if (el.type === 'range' || el.type === 'number') el.value = p.value;
+    else el.value = p.type === 'list' ? p.expr : p.value;
+  }
+}
+
+function showParams(st) {
+  const params = st.params || [];
+  paramsPanel.style.display = params.length ? 'block' : 'none';
+  const sig = JSON.stringify(params.map((p) => [p.name, p.type, p.doc, p.min, p.max, p.step, p.options]));
+  if (sig !== paramsSig) {
+    paramsSig = sig;
+    plist.replaceChildren(...params.map(buildRow));
+  }
+  for (const p of params) {
+    const row = plist.querySelector(`[data-name="${CSS.escape(p.name)}"]`);
+    if (row) fillRow(row, p);
+  }
+  document.getElementById('resetall').disabled = !params.some((p) => p.overridden);
+}
+
+document.getElementById('resetall').onclick = () => sendParams(null);
+document.getElementById('fold').onclick = (e) => {
+  const open = plist.style.display !== 'none';
+  plist.style.display = open ? 'none' : '';
+  e.target.textContent = open ? '+' : '–';
+  e.target.setAttribute('aria-expanded', !open);
+};
+document.getElementById('copycmd').onclick = async (e) => {
+  const sq = (x) => "'" + x.replace(/'/g, "'\\''") + "'";
+  const flags = (lastState?.params || []).filter((p) => p.overridden).map((p) => '-D ' + sq(p.name + '=' + p.expr));
+  const text = flags.join(' ') || '(sin cambios)';
+  try { await navigator.clipboard.writeText(text); } catch { prompt('Opciones -D:', text); return; }
+  e.target.textContent = 'Copiado';
+  setTimeout(() => { e.target.textContent = 'Copiar -D'; }, 1200);
+};
+
+const conn = document.getElementById('conn');
+const events = new EventSource('events');
+events.onopen = () => { conn.style.display = 'none'; };
+events.onerror = () => { conn.style.display = 'block'; };
+events.onmessage = (e) => {
+  const st = JSON.parse(e.data);
+  lastState = st;
+  showModels(st);
+  showStatus(st);
+  showParams(st);
+  if (st.hasModel && st.modelStamp !== loadedStamp) loadModel(st.modelStamp);
+};
+
+function toggle(name, button) {
+  state[name] = !state[name];
+  document.getElementById(button).setAttribute('aria-pressed', state[name]);
+  if (mesh) {
+    mesh.material.wireframe = state.wire;
+    edges.visible = state.edges && !state.wire;
+  }
+  bed.visible = state.grid;
+}
+document.getElementById('fit').onclick = fit;
+document.getElementById('edges').onclick = () => toggle('edges', 'edges');
+document.getElementById('wire').onclick = () => toggle('wire', 'wire');
+document.getElementById('grid').onclick = () => toggle('grid', 'grid');
+addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest?.('input, select, textarea')) return; // typing a value
+  const k = e.key.toLowerCase();
+  if (k === 'f') fit();
+  else if (k === 'e') toggle('edges', 'edges');
+  else if (k === 'w') toggle('wire', 'wire');
+  else if (k === 'g') toggle('grid', 'grid');
+  else if (k === 'n') stepModel(e.shiftKey ? -1 : 1);
+});
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
