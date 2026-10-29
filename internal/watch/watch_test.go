@@ -307,3 +307,19 @@ func TestFollowFromEmptyFolder(t *testing.T) {
 		t.Fatal("the event stream did not end on Close")
 	}
 }
+
+func TestSTLNameIncludesChoices(t *testing.T) {
+	s := &Server{st: status{File: "keychain.tcad", Params: []dsl.ParamValue{
+		{Name: "name", Type: "string", Value: "Ana"},
+		{Name: "font", Type: "string", Value: "mono bold", Options: []any{"sans", "mono bold"}},
+		{Name: "size", Type: "number", Value: 2.5, Options: []any{1.0, 2.5}},
+		{Name: "thickness", Type: "number", Value: 3.0},
+	}}}
+	if got, want := s.stlName(), "keychain-mono_bold-2.5.stl"; got != want {
+		t.Errorf("stlName() = %q, want %q", got, want)
+	}
+	s.st.Output = "out.stl"
+	if got, want := s.stlName(), "out-mono_bold-2.5.stl"; got != want {
+		t.Errorf("stlName() with output = %q, want %q", got, want)
+	}
+}

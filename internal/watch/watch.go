@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/jespino/tcad-studio/internal/dsl"
 	"github.com/jespino/tcad-studio/internal/geom"
@@ -562,12 +563,47 @@ func (s *Server) handleModel(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-// stlName is the suggested file name of the model's STL. Callers hold s.mu.
+// stlName is the suggested file name of the model's STL, with the value of
+// every choice param ("param x = v in [...]") appended so each variant gets
+// its own name: keychain-mono.stl. Callers hold s.mu.
 func (s *Server) stlName() string {
-	if s.st.Output != "" {
-		return s.st.Output
+	name := s.st.Output
+	if name == "" {
+		name = s.st.File
 	}
-	return strings.TrimSuffix(s.st.File, filepath.Ext(s.st.File)) + ".stl"
+	name = strings.TrimSuffix(name, filepath.Ext(name))
+	for _, p := range s.st.Params {
+		if len(p.Options) == 0 {
+			continue
+		}
+		v, ok := p.Value.(string)
+		if !ok {
+			v = dsl.FormatLiteral(p.Value)
+		}
+		if v = fileSafe(v); v != "" {
+			name += "-" + v
+		}
+	}
+	return name + ".stl"
+}
+
+// fileSafe turns a value into a piece of a file name: letters, digits, '.',
+// '_' and '-', with any other run of characters made a single '_'.
+func fileSafe(v string) string {
+	var b strings.Builder
+	sep := false
+	for _, r := range v {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '_' || r == '-' {
+			if sep && b.Len() > 0 {
+				b.WriteByte('_')
+			}
+			b.WriteRune(r)
+			sep = false
+		} else {
+			sep = true
+		}
+	}
+	return b.String()
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
