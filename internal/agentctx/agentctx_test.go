@@ -23,7 +23,7 @@ func TestWrite(t *testing.T) {
 		}
 	}
 	agents, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
-	if !strings.HasPrefix(string(agents), "# My notes\n") || strings.Count(string(agents), beginMarker) != 1 ||
+	if !strings.HasPrefix(string(agents), "# My notes\n") || strings.Count(string(agents), "<!-- tcad:begin (managed by TCAD Studio; edits inside this block are overwritten) -->") != 1 ||
 		!strings.Contains(string(agents), ".tcad/preview.json") {
 		t.Fatalf("AGENTS.md:\n%s", agents)
 	}

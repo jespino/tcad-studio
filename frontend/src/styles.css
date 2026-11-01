@@ -1,0 +1,203 @@
+/* TCAD Studio. The shared components (agentstudio) read the theme below. */
+:root {
+  --bg: #e9edf2;
+  --bar: #f7f8fa;
+  --panel: #ffffff;
+  --panel-2: #f1f3f7;
+  --border: rgba(20, 30, 50, 0.12);
+  --text: #1d2430;
+  --text-muted: #5d6879;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --danger: #c62f2f;
+  --term-bg: #15181d;
+  --term-fg: #e3e7ee;
+  --term-selection: rgba(110, 168, 254, 0.35);
+  --shadow: 0 10px 40px rgba(10, 20, 40, 0.18);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111317;
+    --bar: #1a1d23;
+    --panel: #1f232a;
+    --panel-2: #2a303b;
+    --border: rgba(255, 255, 255, 0.09);
+    --text: #e7ebf1;
+    --text-muted: #9aa4b2;
+    --accent: #7aa2ff;
+    --accent-text: #0d1426;
+    --danger: #f87171;
+    --term-bg: #121418;
+    --term-fg: #e3e7ee;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  font: 13px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+button,
+select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+select {
+  padding: 3px 6px;
+}
+button:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+button:disabled,
+select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+button.big {
+  padding: 7px 16px;
+}
+button.small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+button.link {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  text-align: left;
+}
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+}
+.muted {
+  color: var(--text-muted);
+}
+.small {
+  font-size: 12px;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.spacer {
+  flex: 1;
+}
+.error,
+.danger-text {
+  color: var(--danger);
+}
+
+/* Layout */
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.cube {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+.welcome-card h1 .cube {
+  width: 28px;
+  height: 28px;
+}
+.folder-dir {
+  flex: 1;
+}
+.banner {
+  padding: 6px 12px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--border);
+}
+.main {
+  flex: 1;
+  min-height: 0;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--panel);
+  min-width: 0;
+  min-height: 0;
+}
+.panel-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--border);
+}
+.panel-title {
+  font-weight: 600;
+}
+.terminal .error {
+  padding: 6px 12px;
+  background: var(--bar);
+}
+.preview iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  display: block;
+}
+/* the iframe would swallow the pointer while a splitter is dragged */
+.main:has([data-separator='active']) iframe {
+  pointer-events: none;
+}
+.welcome {
+  height: 100%;
+}

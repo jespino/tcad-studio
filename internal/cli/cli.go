@@ -13,14 +13,14 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
+	"github.com/jespino/agentstudio/browser"
+	tcad "github.com/jespino/tcad-studio"
 	"github.com/jespino/tcad-studio/internal/dsl"
 	"github.com/jespino/tcad-studio/internal/geom"
 	"github.com/jespino/tcad-studio/internal/importer"
@@ -505,23 +505,24 @@ func cmdStudio(args []string) error {
 		return errors.New("studio opens a single folder")
 	}
 	st := studio.New(studio.Options{})
-	defer st.Close()
+	defer st.Shutdown()
 	if len(pos) == 1 {
 		if _, err := st.Open(pos[0]); err != nil {
 			return err
 		}
 	}
-	url, err := st.Start(*addr)
+	// agentstudio's browser server: only requests with the session token
+	// (in the address printed) and from its own pages are answered.
+	srv, url, err := browser.Listen(st, browser.Options{ID: "tcad", Name: "TCAD Studio", Assets: tcad.UI(), Routes: []string{"/preview"}}, *addr)
 	if err != nil {
 		return err
 	}
+	defer srv.Close()
 	fmt.Printf("TCAD Studio at %s (Ctrl+C to stop)\n", url)
 	if *open {
 		openBrowser(url)
 	}
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
+	browser.Wait()
 	return nil
 }
 

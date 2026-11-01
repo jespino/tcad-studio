@@ -9,7 +9,7 @@ STUDIO  := bin/tcad-studio
 OUT     := out
 PKG     := ./cmd/tcad
 SOURCES := $(shell find cmd internal -type f \( -name '*.go' -o -name '*.html' -o -name '*.js' -o -name '*.mjs' -o -name '*.css' -o -name '*.md' \)) \
-           embed.go $(wildcard .agents/skills/tcad/*.md) go.mod go.sum
+           embed.go $(wildcard .agents/skills/tcad/*.md) $(shell find frontend/dist -type f 2>/dev/null) go.mod go.sum
 
 # TCAD Studio (cmd/tcad-studio) is a Wails 3 app: it needs cgo and, on Linux,
 # GTK3 / WebKitGTK 4.1 (libgtk-3-dev, libwebkit2gtk-4.1-dev). GO_TAGS= builds
@@ -32,15 +32,13 @@ ADDR  ?= localhost:8080
 THREE_VERSION ?= 0.160.0
 THREE_URL     := https://unpkg.com/three@$(THREE_VERSION)
 ASSETS        := internal/watch/assets
-# xterm.js version of the agent terminal in TCAD Studio.
-XTERM_VERSION    ?= 6.0.0
-XTERM_FIT_VERSION ?= 0.11.0
-STUDIO_ASSETS    := internal/studio/assets
+# Where "make dev" runs the studio's backend for Vite (frontend/vite.config.ts).
+DEV_ADDR ?= 127.0.0.1:34118
 
 .DEFAULT_GOAL := build
 
 .PHONY: help build install studio install-studio run-studio studio-web test race vet fmt fmt-check check \
-        examples renders watch update-three update-xterm clean
+        examples renders watch update-three frontend dev clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -68,6 +66,14 @@ run-studio: $(STUDIO) ## Open TCAD Studio: make run-studio [FOLDER=designs]
 
 studio-web: $(BIN) ## TCAD Studio in the browser: make studio-web [FOLDER=designs]
 	$(BIN) studio -open $(FOLDER)
+
+frontend: ## Rebuild the studio UI into frontend/dist (committed, so go build needs no Node)
+	cd frontend && npm ci && npm run build
+
+dev: $(BIN) ## The studio UI with hot reload: tcad studio + Vite on http://127.0.0.1:5173 [FOLDER=designs]
+	@[ -d frontend/node_modules ] || (cd frontend && npm ci)
+	@trap 'kill 0' EXIT; export AGENTSTUDIO_TOKEN=$$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n'); \
+	  $(BIN) studio -addr $(DEV_ADDR) $(FOLDER) & (cd frontend && npm run dev)
 
 test: ## Run the tests
 	$(GO) test $(TAGS) ./...
@@ -109,13 +115,6 @@ update-three: ## Update the viewer's three.js: make update-three THREE_VERSION=x
 	curl -sfL -o $(ASSETS)/STLLoader.js $(THREE_URL)/examples/jsm/loaders/STLLoader.js
 	curl -sfL -o $(ASSETS)/LICENSE-three.txt $(THREE_URL)/LICENSE
 	@echo "three.js $(THREE_VERSION) downloaded; check the viewer with 'make watch'"
-
-update-xterm: ## Update the studio terminal's xterm.js: make update-xterm XTERM_VERSION=x.y.z
-	curl -sfL -o $(STUDIO_ASSETS)/xterm.mjs https://unpkg.com/@xterm/xterm@$(XTERM_VERSION)/lib/xterm.mjs
-	curl -sfL -o $(STUDIO_ASSETS)/xterm.css https://unpkg.com/@xterm/xterm@$(XTERM_VERSION)/css/xterm.css
-	curl -sfL -o $(STUDIO_ASSETS)/LICENSE-xterm.txt https://unpkg.com/@xterm/xterm@$(XTERM_VERSION)/LICENSE
-	curl -sfL -o $(STUDIO_ASSETS)/addon-fit.mjs https://unpkg.com/@xterm/addon-fit@$(XTERM_FIT_VERSION)/lib/addon-fit.mjs
-	@echo "xterm.js $(XTERM_VERSION) downloaded; check the terminal with 'make run-studio'"
 
 clean: ## Remove bin/ and out/
 	rm -rf bin $(OUT)

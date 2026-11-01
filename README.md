@@ -33,8 +33,8 @@ STL.
   keeps the last valid version.
 - **STL in and out**: save the STL of any model wherever you want, or import an existing
   STL and have it rebuilt from primitives where possible.
-- Everything runs locally and works offline (three.js and xterm.js are
-  bundled).
+- Everything runs locally and works offline (three.js and the studio's UI
+  are bundled).
 
 ## Getting started
 
@@ -273,6 +273,8 @@ make test           # tests (make race: with the race detector)
 make check          # format + vet + tests + build the examples (for CI)
 make examples       # STLs of examples/ into out/  (make renders: the PNGs)
 make studio-web FOLDER=examples   # the studio in the browser, from bin/tcad
+make dev FOLDER=examples   # the studio's UI with hot reload (Vite + tcad studio)
+make frontend       # rebuild the UI into frontend/dist (needs Node; the build is committed)
 make help           # every target
 ```
 
@@ -294,20 +296,25 @@ make help           # every target
                                                   internal/render)
 ```
 
-The studio is a local web app: `internal/studio` is a server on 127.0.0.1 (a
-free port) that serves the page, mounts the `internal/watch` viewer at
-`/preview/` for the open folder, and runs the agent terminals. The Wails window
-(`cmd/tcad-studio`) only shows that server and provides the native folder
-dialog; `tcad studio` serves the same thing for a browser, with its own folder
-browser. Each session has a random token: the start URL carries it, the page
-keeps it in a `SameSite=Strict` cookie, and the server rejects requests
-without it, from other origins or with another `Host`.
+The studio is built on [agentstudio](https://github.com/jespino/agentstudio),
+the shell shared with the other agent studios (Kino Studio, agtrip, Agave): the
+agent terminals, the recent folders, the folder browser, the desktop window and
+the browser server, and on the UI side the agent panel, the start screen, the
+folder browser and the layout. `internal/studio` is the backend (the open
+folder and its `internal/watch` viewer); `frontend/` is the UI (React, built
+into `frontend/dist`, which the programs embed). The Wails window
+(`cmd/tcad-studio`) binds the backend and shows the viewer from a loopback
+server at a secret path (the viewer streams its updates, which the webview's
+own scheme can't carry); `tcad studio` serves the same UI for a browser, with
+the viewer at `/preview/`. Each browser session has a random token: the start
+URL carries it, the page keeps it in a `SameSite=Strict` cookie, and the server
+rejects requests without it, from other origins or with another `Host`.
 
 - `cmd/tcad-studio`: the desktop app (Wails 3). `cmd/tcad`: the command line.
-- `internal/studio`: the studio backend (folders, session, agent terminals)
-  and its page. It bundles xterm.js 6 (MIT license, in `internal/studio/assets`).
-- `internal/terminal`, `internal/agentctx`: the agents' PTYs and the context
-  files written into every folder.
+- `internal/studio`: the studio backend (the open folder, its viewer and what
+  the user sees, written to `.tcad/preview.json`).
+- `frontend/`: the studio's UI (React + agentstudio).
+- `internal/agentctx`: the context files written into every folder.
 - `internal/watch`: the live viewer. It discovers the models of the given
   paths, polls the files, rebuilds the chosen one, notifies the page through
   Server-Sent Events and serves it an STL with per-facet colors. It is a

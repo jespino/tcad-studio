@@ -30,3 +30,6 @@
 /examples/GEMINI.md
 /examples/.agents/
 /examples/.claude/
+
+# The studio UI's dependencies (its build, frontend/dist, is committed)
+/frontend/node_modules/
