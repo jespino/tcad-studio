@@ -27,11 +27,14 @@ const scrollback = 512 * 1024
 
 // Harness is a program the panel can launch.
 type Harness struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Command   string   `json:"command"`
-	Args      []string `json:"args,omitempty"`
-	Available bool     `json:"available"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Command string   `json:"command"`
+	Args    []string `json:"args,omitempty"`
+	// ResumeArgs are added to Args to continue a saved conversation; empty
+	// when the program cannot resume.
+	ResumeArgs []string `json:"resumeArgs,omitempty"`
+	Available  bool     `json:"available"`
 }
 
 // DefaultHarnesses lists the known agent CLIs plus a plain shell.
@@ -44,9 +47,9 @@ func DefaultHarnesses() []Harness {
 		}
 	}
 	hs := []Harness{
-		{ID: "claude", Name: "Claude Code", Command: "claude"},
-		{ID: "codex", Name: "Codex", Command: "codex"},
-		{ID: "gemini", Name: "Gemini CLI", Command: "gemini"},
+		{ID: "claude", Name: "Claude Code", Command: "claude", ResumeArgs: []string{"--resume"}},
+		{ID: "codex", Name: "Codex", Command: "codex", ResumeArgs: []string{"resume"}},
+		{ID: "gemini", Name: "Gemini CLI", Command: "gemini", ResumeArgs: []string{"--resume"}},
 		{ID: "agy", Name: "Antigravity", Command: "agy"},
 		{ID: "shell", Name: "Shell", Command: shell},
 	}
@@ -55,6 +58,17 @@ func DefaultHarnesses() []Harness {
 		hs[i].Available = err == nil
 	}
 	return hs
+}
+
+// ForResume returns h launched so that it continues a saved conversation of
+// the folder it runs in: Claude Code and Codex open their session picker,
+// Gemini CLI continues the latest session.
+func (h Harness) ForResume() (Harness, error) {
+	if len(h.ResumeArgs) == 0 {
+		return Harness{}, fmt.Errorf("%s cannot resume conversations", h.Name)
+	}
+	h.Args = append(append([]string(nil), h.Args...), h.ResumeArgs...)
+	return h, nil
 }
 
 // Info describes a running session.

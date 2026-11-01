@@ -15,7 +15,7 @@
 //	POST /api/choose                native folder dialog → {path} ("" if cancelled)
 //	GET  /api/dirs?path=            folder listing, for the in-page folder browser
 //	POST /api/mkdir   {path}        create a folder (in-page browser)
-//	POST /api/terminal/start   {harness, cols, rows} → {id}
+//	POST /api/terminal/start   {harness, cols, rows, resume} → {id}
 //	POST /api/terminal/input   {id, data}
 //	POST /api/terminal/resize  {id, cols, rows}
 //	POST /api/terminal/stop    {id}
@@ -425,7 +425,9 @@ func (s *Studio) linkTCAD() string {
 	return dir
 }
 
-func (s *Studio) startTerminal(harness string, cols, rows int) (string, error) {
+// startTerminal runs an agent in the open folder; with resume, it continues
+// one of the agent's saved conversations instead of starting a new one.
+func (s *Studio) startTerminal(harness string, cols, rows int, resume bool) (string, error) {
 	f := s.current()
 	if f == nil {
 		return "", errors.New("no folder is open")
@@ -439,6 +441,13 @@ func (s *Studio) startTerminal(harness string, cols, rows int) (string, error) {
 	}
 	if h == nil {
 		return "", fmt.Errorf("unknown agent %q", harness)
+	}
+	if resume {
+		r, err := h.ForResume()
+		if err != nil {
+			return "", err
+		}
+		h = &r
 	}
 	// Refresh the context: the user may have edited or deleted it.
 	if err := agentctx.Write(f.Dir, tcad.Skill, tcad.SkillDir); err != nil {
@@ -689,6 +698,7 @@ type termReq struct {
 	Data    string `json:"data"`
 	Cols    int    `json:"cols"`
 	Rows    int    `json:"rows"`
+	Resume  bool   `json:"resume"`
 }
 
 func (s *Studio) handleTermStart(w http.ResponseWriter, r *http.Request) {
@@ -696,7 +706,7 @@ func (s *Studio) handleTermStart(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	id, err := s.startTerminal(req.Harness, req.Cols, req.Rows)
+	id, err := s.startTerminal(req.Harness, req.Cols, req.Rows, req.Resume)
 	if err != nil {
 		fail(w, err)
 		return

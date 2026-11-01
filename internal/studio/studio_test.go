@@ -185,6 +185,27 @@ func TestStudio(t *testing.T) {
 	}
 	next("terminal:exit")
 
+	// Resume continues a saved conversation with the agent's own option.
+	// The fake "claude" says how it was run.
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\necho \"claude args: $*\"\n"), 0o755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	r, out = post("/api/terminal/start", map[string]any{"harness": "claude", "cols": 80, "rows": 24, "resume": true})
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("resume: %v", out)
+	}
+	output.Reset()
+	for !strings.Contains(output.String(), "claude args: --resume") {
+		ev := next("terminal:data")
+		b, _ := base64.StdEncoding.DecodeString(ev["data"].(string))
+		output.Write(b)
+	}
+	next("terminal:exit")
+	// A shell has no conversations to resume.
+	if r, _ := post("/api/terminal/start", map[string]any{"harness": "shell", "cols": 80, "rows": 24, "resume": true}); r.StatusCode == http.StatusOK {
+		t.Fatal("resuming a shell should fail")
+	}
+
 	// Closing the folder stops serving its preview.
 	post("/api/close", map[string]any{})
 	if r, _ := c.Get(base + "/preview/"); r.StatusCode != http.StatusNotFound {

@@ -175,7 +175,8 @@
       <span class="spacer"></span>
       <button class="btn" id="restart-btn" hidden title="Restart the agent">Restart</button>
       <button class="btn" id="stop-btn" hidden>Stop</button>
-      <button class="btn primary" id="start-btn">Start</button>
+      <button class="btn" id="resume-btn" hidden>Resume</button>
+      <button class="btn primary" id="start-btn" title="Start a new conversation">Start</button>
     </div>
     <div id="agent-error" class="error"></div>
     <div id="term-wrap">
@@ -441,6 +442,11 @@ function showAgent() {
   const h = (state?.harnesses ?? []).find((x) => x.id === $('harness').value);
   $('start-btn').hidden = running();
   $('start-btn').disabled = !h?.available;
+  $('resume-btn').hidden = running() || !h?.resumeArgs?.length;
+  $('resume-btn').disabled = !h?.available;
+  $('resume-btn').title = h?.id === 'gemini'
+    ? 'Continue the latest conversation in this folder'
+    : 'Pick a saved conversation in this folder to continue';
   $('restart-btn').hidden = $('stop-btn').hidden = !running();
   $('agent-empty').style.display = termId === null ? '' : 'none';
 }
@@ -450,7 +456,7 @@ function agentError(msg) {
   $('agent-error').style.display = msg ? 'block' : 'none';
 }
 
-async function startAgent(harness = $('harness').value) {
+async function startAgent(harness = $('harness').value, resume = false) {
   agentError('');
   $('harness').value = harness;
   store.set('tcad:harness', harness);
@@ -461,7 +467,7 @@ async function startAgent(harness = $('harness').value) {
   starting = true;
   try {
     fit.fit();
-    const { id } = await api('terminal/start', { harness, cols: term.cols, rows: term.rows });
+    const { id } = await api('terminal/start', { harness, cols: term.cols, rows: term.rows, resume });
     termId = id;
     exited = false;
     term.focus();
@@ -480,6 +486,7 @@ async function stopAgent() {
 
 $('start-btn').onclick = () => startAgent();
 $('restart-btn').onclick = () => startAgent();
+$('resume-btn').onclick = () => startAgent($('harness').value, true);
 $('stop-btn').onclick = stopAgent;
 $('harness').onchange = showAgent;
 

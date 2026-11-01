@@ -65,3 +65,20 @@ func TestMergeEnv(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+func TestForResume(t *testing.T) {
+	want := map[string]string{"claude": "--resume", "codex": "resume", "gemini": "--resume"}
+	for _, h := range DefaultHarnesses() {
+		h.Args = []string{"--flag"}
+		r, err := h.ForResume()
+		if args, ok := want[h.ID]; !ok {
+			if err == nil {
+				t.Errorf("%s: resuming should fail", h.ID)
+			}
+		} else if err != nil || strings.Join(r.Args, " ") != "--flag "+args {
+			t.Errorf("%s: %v, %v", h.ID, r.Args, err)
+		} else if len(h.Args) != 1 {
+			t.Errorf("%s: ForResume changed the original args: %v", h.ID, h.Args)
+		}
+	}
+}
