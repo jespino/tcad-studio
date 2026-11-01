@@ -34,9 +34,6 @@
   }
 }
 
-* {
-  box-sizing: border-box;
-}
 html,
 body,
 #root {
@@ -91,30 +88,9 @@ button.small {
   padding: 2px 8px;
   font-size: 12px;
 }
-button.link {
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  text-align: left;
-}
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.95em;
-}
-.muted {
-  color: var(--text-muted);
-}
-.small {
-  font-size: 12px;
-}
-.ellipsis {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.spacer {
-  flex: 1;
 }
 .error,
 .danger-text {
@@ -160,18 +136,6 @@ code {
   background: var(--bar);
   border-bottom: 1px solid var(--border);
 }
-.main {
-  flex: 1;
-  min-height: 0;
-}
-.panel {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--panel);
-  min-width: 0;
-  min-height: 0;
-}
 .panel-header {
   flex: none;
   display: flex;
@@ -180,9 +144,6 @@ code {
   padding: 6px 10px;
   background: var(--bar);
   border-bottom: 1px solid var(--border);
-}
-.panel-title {
-  font-weight: 600;
 }
 .terminal .error {
   padding: 6px 12px;

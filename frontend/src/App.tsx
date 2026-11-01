@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ProjectMenu, ProjectPicker, StudioLayout, TerminalPanel, Welcome } from '@jespino/agentstudio';
+import { ProjectMenu, ProjectPicker, StudioLayout, TerminalPanel, toast, Toaster, Welcome } from '@jespino/agentstudio';
 import { api, errorText, EVENT_PROJECT, on, type Folder } from './api';
 import { useStore } from './store';
 
@@ -15,7 +15,6 @@ function Cube() {
 export function App() {
   const folder = useStore((s) => s.folder);
   const loaded = useStore((s) => s.loaded);
-  const toast = useStore((s) => s.toast);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,11 +41,7 @@ export function App() {
         {folder && <span className="muted small ellipsis folder-dir">{folder.dir}</span>}
       </header>
       {error && <div className="banner error">{error}</div>}
-      {toast && (
-        <div className="toast" key={toast.id} onClick={() => useStore.setState({ toast: null })}>
-          {toast.text}
-        </div>
-      )}
+      <Toaster />
       <ProjectPicker />
       {loaded && !folder && !error && (
         <Welcome title="TCAD Studio">
@@ -65,7 +60,7 @@ export function App() {
 function Editor() {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    api.previewURL().then(setUrl, (e) => useStore.getState().showToast(errorText(e)));
+    api.previewURL().then(setUrl, (e) => toast(errorText(e)));
   }, []);
   return (
     <StudioLayout

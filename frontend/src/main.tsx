@@ -20,7 +20,6 @@ configureStudio({
   canOpen: () => true,
   create: (dir) => api.newProject(dir),
   currentDir: () => useStore.getState().folder?.dir,
-  notify: (message) => useStore.getState().showToast(message),
 });
 
 createRoot(document.getElementById('root')!).render(

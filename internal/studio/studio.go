@@ -75,7 +75,6 @@ type Studio struct {
 	mu       sync.Mutex
 	folder   *Folder
 	preview  *watch.Server
-	saveDir  string // where the last STL was saved
 	loopback string // the viewer's address on the loopback server ("" in a browser)
 
 	states chan previewState // latest viewer state, written to .tcad/preview.json
@@ -335,28 +334,5 @@ func (s *Studio) writePreviews() {
 // saveSTL asks where to save a model's STL and writes it there. The dialog
 // starts where the last STL went, or next to the model.
 func (s *Studio) saveSTL(file, name string, stl []byte) (string, error) {
-	d := s.Dialogs()
-	s.mu.Lock()
-	dir := s.saveDir
-	s.mu.Unlock()
-	if d == nil {
-		return "", errors.New("no native dialogs in this shell")
-	}
-	if dir == "" {
-		dir = filepath.Dir(file)
-	}
-	path, err := d.SaveFile("Save STL", dir, name)
-	if err != nil || path == "" {
-		return "", err
-	}
-	if !strings.EqualFold(filepath.Ext(path), ".stl") {
-		path += ".stl"
-	}
-	if err := shared.WriteAtomic(path, stl); err != nil {
-		return "", err
-	}
-	s.mu.Lock()
-	s.saveDir = filepath.Dir(path)
-	s.mu.Unlock()
-	return path, nil
+	return s.SaveAs("Save STL", filepath.Dir(file), name, stl)
 }
