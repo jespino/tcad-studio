@@ -47,7 +47,7 @@ ones it finds on your `PATH`.
 make studio                     # builds bin/tcad-studio
 bin/tcad-studio                 # start screen: open a folder or a recent one
 bin/tcad-studio ~/designs       # straight into a folder
-make run-studio FOLDER=examples # the same, through make
+make run FOLDER=examples        # the same, through make
 make install-studio             # installs tcad-studio into $GOPATH/bin
 ```
 

@@ -16,7 +16,7 @@ SOURCES := $(shell find cmd internal -type f \( -name '*.go' -o -name '*.html' -
 # against Wails' default GTK4 / WebKitGTK 6.0 instead.
 GO_TAGS ?= $(if $(filter Linux,$(shell uname -s)),gtk3)
 TAGS    := -tags "$(GO_TAGS)"
-# Folder opened by "make run-studio" / "make studio-web" (empty: the start screen).
+# Folder opened by "make run" / "make studio-web" (empty: the start screen).
 FOLDER  ?=
 
 EXAMPLES := $(wildcard examples/*.tcad)
@@ -37,7 +37,7 @@ DEV_ADDR ?= 127.0.0.1:34118
 
 .DEFAULT_GOAL := build
 
-.PHONY: help build install studio install-studio run-studio studio-web test race vet fmt fmt-check check \
+.PHONY: help build install studio install-studio run run-studio studio-web test race vet fmt fmt-check check \
         examples renders watch update-three frontend dev clean
 
 help: ## Show this help
@@ -61,8 +61,10 @@ $(STUDIO): $(SOURCES)
 install-studio: ## Install tcad-studio into $GOPATH/bin (or $GOBIN)
 	$(GO) install $(TAGS) ./cmd/tcad-studio
 
-run-studio: $(STUDIO) ## Open TCAD Studio: make run-studio [FOLDER=designs]
+run: $(STUDIO) ## Build TCAD Studio and start it from the repo: make run [FOLDER=designs]
 	$(STUDIO) $(FOLDER)
+
+run-studio: run ## Alias of "make run"
 
 studio-web: $(BIN) ## TCAD Studio in the browser: make studio-web [FOLDER=designs]
 	$(BIN) studio -open $(FOLDER)
