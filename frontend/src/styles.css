@@ -162,3 +162,6 @@ code {
 .welcome {
   height: 100%;
 }
+.source-empty {
+  padding: 16px;
+}

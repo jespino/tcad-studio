@@ -18,12 +18,25 @@ export interface Folder {
   name: string;
 }
 
+/** What the viewer shows (Go: studio.PreviewState). */
+export interface Preview {
+  /** the model, relative to the folder ("" when there are none) */
+  model: string;
+  /** its build error: "file:line:col: message" */
+  error?: string;
+}
+
+export const EVENT_PREVIEW = 'preview:state';
+
 export const api = {
   ...baseApi(backend.call),
   currentProject: () => backend.call<Folder | null>('CurrentProject'),
   newProject: (dir: string) => backend.call<Folder>('NewProject', dir),
   /** where the viewer of the open folder is served */
   previewURL: () => backend.call<string>('PreviewURL'),
+  preview: () => backend.call<Preview>('Preview'),
+  /** shows a model of the folder in the viewer */
+  showModel: (model: string) => backend.call<void>('ShowModel', model),
 };
 
 export { EVENT_PROJECT } from '@jespino/agentstudio';

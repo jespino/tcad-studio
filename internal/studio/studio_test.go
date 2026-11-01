@@ -171,6 +171,26 @@ func TestStudio(t *testing.T) {
 	if state.Model != "part.tcad" || !state.CanSave {
 		t.Fatalf("preview state %+v", state)
 	}
+	// The source panel: the folder's models, read, saved; the viewer says
+	// what it shows.
+	if ev := next(EventPreview); ev["model"] != "part.tcad" {
+		t.Fatalf("preview event %v", ev)
+	}
+	if _, out := rpc("SourceFiles"); len(out["result"].([]any)) != 1 || out["result"].([]any)[0] != "part.tcad" {
+		t.Fatalf("source files %v", out)
+	}
+	if _, out := rpc("ReadSource", "part.tcad"); out["result"] != "box(10, 10, 10)\n" {
+		t.Fatalf("read %v", out)
+	}
+	if _, out := rpc("Preview"); out["result"].(map[string]any)["model"] != "part.tcad" {
+		t.Fatalf("preview %v", out)
+	}
+	if _, out := rpc("ShowModel", "nope.tcad"); out["error"] == nil {
+		t.Fatal("showed an unknown model")
+	}
+	if _, out := rpc("WriteSource", "part.tcad", "box(10, 10, 10)\n"); out["error"] != nil {
+		t.Fatalf("write %v", out)
+	}
 	r, err := c.Post(base+"/preview/api/save", "application/json", nil)
 	if err != nil {
 		t.Fatal(err)

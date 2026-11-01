@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ProjectMenu, ProjectPicker, StudioLayout, TerminalPanel, toast, Toaster, Welcome } from '@jespino/agentstudio';
-import { api, errorText, EVENT_PROJECT, on, type Folder } from './api';
+import { Group, Panel, Separator } from 'react-resizable-panels';
+import { ProjectMenu, ProjectPicker, SourceButton, StudioLayout, TerminalPanel, toast, Toaster, useSourceOpen, Welcome } from '@jespino/agentstudio';
+import { api, errorText, EVENT_PREVIEW, EVENT_PROJECT, on, type Folder, type Preview } from './api';
+import { Source } from './Source';
 import { useStore } from './store';
 
 function Cube() {
@@ -39,6 +41,7 @@ export function App() {
         </span>
         {folder && <ProjectMenu project={folder} showFile={false} />}
         {folder && <span className="muted small ellipsis folder-dir">{folder.dir}</span>}
+        {folder && <SourceButton title="The models' source (Ctrl+2)" />}
       </header>
       {error && <div className="banner error">{error}</div>}
       <Toaster />
@@ -52,15 +55,20 @@ export function App() {
         </Welcome>
       )}
       {/* keyed by folder: another folder gets a new viewer and terminal */}
-      {folder && <Editor key={folder.dir} />}
+      {folder && <Editor key={folder.dir} folder={folder} />}
     </div>
   );
 }
 
-function Editor() {
+function Editor({ folder }: { folder: Folder }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [preview, setPreview] = useState<Preview>({ model: '' });
+  const showSource = useSourceOpen();
   useEffect(() => {
     api.previewURL().then(setUrl, (e) => toast(errorText(e)));
+    const off = on<Preview>(EVENT_PREVIEW, setPreview);
+    api.preview().then(setPreview, () => {});
+    return off;
   }, []);
   return (
     <StudioLayout
@@ -79,7 +87,19 @@ function Editor() {
         />
       }
     >
-      <div className="panel preview">{url && <iframe title="3D preview" src={url} />}</div>
+      <Group orientation="horizontal">
+        <Panel id="preview" minSize={280}>
+          <div className="panel preview">{url && <iframe title="3D preview" src={url} />}</div>
+        </Panel>
+        {showSource && (
+          <>
+            <Separator className="sep-v" />
+            <Panel id="source" defaultSize="45" minSize={260}>
+              <Source folder={folder} preview={preview} />
+            </Panel>
+          </>
+        )}
+      </Group>
     </StudioLayout>
   );
 }

@@ -810,6 +810,22 @@ func (s *Server) handleParams(w http.ResponseWriter, r *http.Request) {
 //
 // The model must be one of the listed ones. Each model keeps its own param
 // overrides while switching between them.
+// ShowModel switches the page to one of its models (named as in the
+// state's models).
+func (s *Server) ShowModel(model string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !slices.Contains(s.st.Models, model) {
+		return fmt.Errorf("unknown model %q", model)
+	}
+	if model != s.model {
+		s.selectModel(model)
+		s.broadcast()
+		s.requestBuild()
+	}
+	return nil
+}
+
 func (s *Server) handleModelSelect(w http.ResponseWriter, r *http.Request) {
 	reply := func(code int, v any) {
 		w.Header().Set("Content-Type", "application/json")
@@ -826,18 +842,10 @@ func (s *Server) handleModelSelect(w http.ResponseWriter, r *http.Request) {
 			reply(http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
 			return
 		}
-		s.mu.Lock()
-		if !slices.Contains(s.st.Models, req.Model) {
-			s.mu.Unlock()
-			reply(http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown model %q", req.Model)})
+		if err := s.ShowModel(req.Model); err != nil {
+			reply(http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
 		}
-		if req.Model != s.model {
-			s.selectModel(req.Model)
-			s.broadcast()
-			s.requestBuild()
-		}
-		s.mu.Unlock()
 	default:
 		w.Header().Set("Allow", "GET, PUT")
 		reply(http.StatusMethodNotAllowed, map[string]string{"error": "use GET or PUT"})

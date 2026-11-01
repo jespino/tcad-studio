@@ -43,6 +43,16 @@ import (
 // when closed).
 const EventFolder = shared.EventProject
 
+// EventPreview is sent when the viewer shows another model or its build
+// result changes. Payload: PreviewState.
+const EventPreview = "preview:state"
+
+// PreviewState is what the viewer shows, for the UI's source panel.
+type PreviewState struct {
+	Model string `json:"model"`           // the model shown, relative to the folder
+	Error string `json:"error,omitempty"` // its build error ("file:line:col: message")
+}
+
 // Dialogs are native dialogs, provided by the desktop shell.
 type Dialogs = shared.Dialogs
 
@@ -76,6 +86,7 @@ type Studio struct {
 	folder   *Folder
 	preview  *watch.Server
 	loopback string // the viewer's address on the loopback server ("" in a browser)
+	shown    PreviewState
 
 	states chan previewState // latest viewer state, written to .tcad/preview.json
 	done   chan struct{}
@@ -152,7 +163,7 @@ func (s *Studio) Open(path string) (*Folder, error) {
 	opts := watch.Options{
 		Paths: []string{dir}, Recursive: true, Base: dir, Follow: true,
 		Build:   model.WatchBuild,
-		OnState: func(data []byte) { s.queuePreview(dir, data) },
+		OnState: func(data []byte) { s.queuePreview(dir, data); s.previewChanged(dir, data) },
 		Log:     s.opts.Log,
 	}
 	if s.Dialogs() != nil {
@@ -165,7 +176,7 @@ func (s *Studio) Open(path string) (*Folder, error) {
 	f := &Folder{Path: dir, Dir: dir, Name: filepath.Base(dir)}
 	s.mu.Lock()
 	old := s.preview
-	s.preview, s.folder = pv, f
+	s.preview, s.folder, s.shown = pv, f, PreviewState{}
 	s.mu.Unlock()
 	if old != nil {
 		old.Close()
@@ -203,7 +214,7 @@ func (s *Studio) CloseFolder() {
 	if s.preview != nil {
 		s.preview.Close()
 	}
-	s.preview, s.folder = nil, nil
+	s.preview, s.folder, s.shown = nil, nil, PreviewState{}
 	s.mu.Unlock()
 	s.SetProject("", "")
 	s.Emit(EventFolder, nil)
@@ -284,6 +295,44 @@ func (s *Studio) ServePreviewHTTP() (func(), error) {
 	s.loopback = "http://" + host + prefix + "/preview/"
 	s.mu.Unlock()
 	return func() { srv.Close() }, nil
+}
+
+// previewChanged follows the viewer: what it shows goes to the UI, and the
+// model it rebuilt may have been edited by the agent (SourceChanged tells the
+// source panel).
+func (s *Studio) previewChanged(dir string, data []byte) {
+	var st PreviewState
+	if json.Unmarshal(data, &st) != nil {
+		return
+	}
+	if st.Model != "" {
+		s.SourceChanged(filepath.Join(dir, filepath.FromSlash(st.Model)))
+	}
+	s.mu.Lock()
+	same := st == s.shown
+	s.shown = st
+	s.mu.Unlock()
+	if !same {
+		s.Emit(EventPreview, st)
+	}
+}
+
+// Preview returns what the viewer shows.
+func (s *Studio) Preview() PreviewState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.shown
+}
+
+// ShowModel switches the viewer to a model of the folder (a relative path).
+func (s *Studio) ShowModel(model string) error {
+	s.mu.Lock()
+	pv := s.preview
+	s.mu.Unlock()
+	if pv == nil {
+		return errors.New("no folder is open")
+	}
+	return pv.ShowModel(model)
 }
 
 // queuePreview keeps the latest viewer state for writePreviews, without
